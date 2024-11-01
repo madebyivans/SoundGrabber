@@ -1,0 +1,45 @@
+# SoundGrabber
+
+SoundGrabber is an audio recording utility for macOS that allows you to capture system audio.
+
+## Purchase
+
+SoundGrabber is available for purchase at [your store link]. While the source code is freely available under GPL, the compiled application requires a purchase to support ongoing development.
+
+## Installation
+
+1. Purchase and download SoundGrabber.app.zip
+2. Unzip the file
+3. Right-click (or Control-click) SoundGrabber.app and select "Open"
+4. Click "Open" in the security dialog that appears
+5. If BlackHole is not installed, SoundGrabber will prompt you to install it
+6. Follow the BlackHole installer prompts when they appear
+7. Restart your Mac after BlackHole installation (recommended)
+
+## Usage
+
+1. Click the SoundGrabber icon in your menu bar
+2. Select "Start Recording" to begin capturing audio
+3. Select "Stop Recording" when finished
+4. Recordings are saved to your Desktop by default
+
+## Requirements
+
+- macOS 10.15 or later
+- Microphone permissions (will be requested on first use)
+
+## License
+
+SoundGrabber's source code is licensed under the GNU General Public License v3 (GPL-3.0). This means:
+- The source code is freely available and can be modified and redistributed
+- The compiled application is available for purchase to support development
+- Commercial use is permitted
+- Any modifications must also be released under GPL-3.0
+
+## Attribution
+
+This software includes BlackHole (https://existential.audio/blackhole/), which is licensed under the GNU General Public License v3.0.
+
+## Support
+
+For support or bug reports, please open an issue on GitHub or contact a.ivans@icloud.com

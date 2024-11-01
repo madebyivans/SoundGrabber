@@ -1,0 +1,35 @@
+2024-11-01 18:56:05,183 - INFO - Logging is set up.
+2024-11-01 18:56:05,183 - INFO - Log file is located at: /Users/ivans/Desktop/app/audio_recorder.log
+2024-11-01 18:56:05,193 - INFO - AdvancedAudioRecorderApp initialized
+2024-11-01 18:56:05,195 - INFO - Microphone access granted
+2024-11-01 18:56:05,237 - INFO - Periodic check: Application is still running
+2024-11-01 18:56:08,322 - INFO - Start Recording triggered
+2024-11-01 18:56:08,445 - INFO - Previous input device: MacBook Pro Microphone
+2024-11-01 18:56:08,445 - INFO - Previous output device: MacBook Pro Speakers
+2024-11-01 18:56:08,511 - INFO - Switched input to BlackHole 2ch
+2024-11-01 18:56:08,577 - INFO - Switched output to SoundGrabber
+2024-11-01 18:56:08,678 - INFO - Using 2 channels for BlackHole 2ch
+2024-11-01 18:56:08,699 - INFO - Attempting to play sound: /Users/ivans/Desktop/app/resources/start_recording.wav
+2024-11-01 18:56:09,059 - INFO - Sound played successfully: start_recording.wav
+2024-11-01 18:56:09,560 - INFO - Recording started with settings: fs=48000, channels=2
+2024-11-01 18:56:09,563 - INFO - Recording started successfully
+2024-11-01 18:56:19,027 - INFO - Stop Recording triggered
+2024-11-01 18:56:19,211 - INFO - Recording stopped
+2024-11-01 18:56:19,213 - INFO - Raw audio array shape: (454656, 2), dtype: int32
+2024-11-01 18:56:19,213 - INFO - Trimming silence from start and end
+2024-11-01 18:56:19,225 - INFO - Trim analysis: start_trim=258351, end_trim=372204, total_samples=454656
+2024-11-01 18:56:19,226 - INFO - First transient found at sample: 0
+2024-11-01 18:56:19,226 - INFO - Final audio shape after transient trimming: (113853, 2)
+2024-11-01 18:56:19,226 - INFO - No initial fade applied as audio was trimmed or transient was found
+2024-11-01 18:56:19,226 - INFO - No fade-out applied as end trimming was performed
+2024-11-01 18:56:19,226 - INFO - Attempting to save file to: /Users/ivans/Desktop/recording_2024.Nov.01 - 18:56:19.wav
+2024-11-01 18:56:19,230 - INFO - File saved successfully. Size: 910912 bytes
+2024-11-01 18:56:19,230 - INFO - Total audio processing and saving time: 0.02 seconds
+2024-11-01 18:56:19,231 - INFO - Switching back to input: MacBook Pro Microphone, output: MacBook Pro Speakers
+2024-11-01 18:56:19,319 - INFO - Switched input to MacBook Pro Microphone
+2024-11-01 18:56:19,385 - INFO - Switched output to MacBook Pro Speakers
+2024-11-01 18:56:19,486 - INFO - Attempting to play sound: /Users/ivans/Desktop/app/resources/stop_recording.wav
+2024-11-01 18:56:20,575 - INFO - Sound played successfully: stop_recording.wav
+2024-11-01 18:56:20,577 - INFO - Recording stopped successfully
+2024-11-01 18:57:05,196 - INFO - Periodic check: Application is still running
+2024-11-01 18:58:05,195 - INFO - Periodic check: Application is still running
