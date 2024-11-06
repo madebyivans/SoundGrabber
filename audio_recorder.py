@@ -155,27 +155,29 @@ class AdvancedAudioRecorderApp(rumps.App):
     def start_recording(self):
         try:
             self.apply_settings()
+            self.channels = 2
+            self.audio_data = []
             
+            # Initialize stream before device switch
+            self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
+                                       dtype='int32', device='BlackHole 2ch',
+                                       callback=self.audio_callback)
+            
+            # Store current devices
             self.previous_input_device = self.get_current_input_device()
             self.previous_output_device = self.get_current_output_device()
             
+            # Switch devices first
             self.switch_devices("BlackHole 2ch", "SoundGrabber")
             
-            self.channels = 2
-            
-            self.recording = False
-            self.audio_data = []
-            self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
-                                         dtype='int32', device='BlackHole 2ch',
-                                         callback=self.audio_callback)
-            self.stream.start()
-            
+            # Play sound
             self.play_sound('start_recording.wav')
+            time.sleep(0.135)  # Wait exactly for the sound duration
             
-            time.sleep(0.5)
-            
+            # Start recording immediately after sound
             self.recording = True
             self.recording_start_time = time.time()
+            self.stream.start()
             
             self.menu["Start Recording"].title = "Stop Recording"
             self.icon = self.icon_recording_path
