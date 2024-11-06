@@ -33,6 +33,7 @@ import urllib.request
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox
+import AppKit
 
 def resource_path(relative_path):
     try:
@@ -53,13 +54,19 @@ class AdvancedAudioRecorderApp(rumps.App):
     def __init__(self):
         self.icon_path = resource_path("icon.icns")
         self.icon_recording_path = resource_path("icon_recording.icns")
+        
+        # Keep only these essential activation settings
+        app = AppKit.NSApplication.sharedApplication()
+        app.activateIgnoringOtherApps_(False)
+        app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+        
         super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
         self.setup_logging()
         self.settings = self.load_settings()
         self.recording = False
         self.audio_data = []
         self.fs = 48000
-        self.channels = 2  # Always 2 for BlackHole 2ch
+        self.channels = 2
         self.stream = None
         self.switch_audio_source_path = self.find_switch_audio_source()
         if not self.switch_audio_source_path:
@@ -68,23 +75,14 @@ class AdvancedAudioRecorderApp(rumps.App):
         self.last_recorded_file = None
         self.setup_menu()
         request_microphone_access()
-        logging.info("AdvancedAudioRecorderApp initialized")
         self.previous_input_device = None
-        rumps.Timer(self.check_recording_state, 5).start()  # Check every 5 seconds
-        rumps.Timer(self.periodic_check, 60).start()  # Check every 60 seconds
-        self.version = "1.0.0"  # Current version
-        self.update_url = "https://raw.githubusercontent.com/yourusername/yourrepo/main/version.txt"
-        self.download_url = "https://github.com/yourusername/yourrepo/releases/latest/download/SoundGrabber.app.zip"
-        self.check_for_updates()
+        rumps.Timer(self.check_recording_state, 5).start()
 
     def setup_logging(self):
         app_directory = os.path.dirname(os.path.abspath(__file__))
         log_file = os.path.join(app_directory, 'audio_recorder.log')
-        logging.basicConfig(filename=log_file, level=logging.INFO,
+        logging.basicConfig(filename=log_file, level=logging.ERROR,
                             format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.info("Logging is set up.")
-        print(f"Log file is located at: {log_file}")
-        logging.info(f"Log file is located at: {log_file}")
 
     def load_settings(self):
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
@@ -155,23 +153,16 @@ class AdvancedAudioRecorderApp(rumps.App):
             self.start_recording()
 
     def start_recording(self):
-        logging.info("Start Recording triggered")
         try:
             self.apply_settings()
             
-            # Store current devices
             self.previous_input_device = self.get_current_input_device()
             self.previous_output_device = self.get_current_output_device()
-            logging.info(f"Previous input device: {self.previous_input_device}")
-            logging.info(f"Previous output device: {self.previous_output_device}")
             
-            # Switch devices
             self.switch_devices("BlackHole 2ch", "SoundGrabber")
             
             self.channels = 2
-            logging.info(f"Using {self.channels} channels for BlackHole 2ch")
             
-            # Start the stream but don't start capturing audio yet
             self.recording = False
             self.audio_data = []
             self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
@@ -179,57 +170,37 @@ class AdvancedAudioRecorderApp(rumps.App):
                                          callback=self.audio_callback)
             self.stream.start()
             
-            # Play sound after starting the stream but before capturing audio
             self.play_sound('start_recording.wav')
             
-            # Wait for the sound to finish playing (adjust the sleep time as needed)
-            time.sleep(0.5)  # Adjust this value based on the length of your start_recording.wav
+            time.sleep(0.5)
             
-            # Now start capturing audio
             self.recording = True
             self.recording_start_time = time.time()
             
-            logging.info(f"Recording started with settings: fs={self.fs}, channels={self.channels}")
             self.menu["Start Recording"].title = "Stop Recording"
             self.icon = self.icon_recording_path
             
-            if self.stream is not None and self.stream.active:
-                logging.info("Recording started successfully")
-            else:
-                logging.error("Failed to start recording: Stream is not active")
         except Exception as e:
             logging.error(f"Error starting recording: {str(e)}")
             logging.error(traceback.format_exc())
 
     def stop_recording(self):
-        logging.info("Stop Recording triggered")
         try:
             self.recording = False
             if self.stream:
                 self.stream.stop()
                 self.stream.close()
-            logging.info("Recording stopped")
             
             if self.audio_data:
                 self.save_audio_file()
-            else:
-                logging.warning("No audio data recorded")
             
-            logging.info(f"Switching back to input: {self.previous_input_device}, output: {self.previous_output_device}")
-            # Switch devices back
             self.switch_devices(self.previous_input_device, self.previous_output_device)
             
-            # Play sound after switching devices back
             self.play_sound('stop_recording.wav')
             
             self.menu["Start Recording"].title = "Start Recording"
             self.icon = self.icon_path
             
-            if self.stream is None or not self.stream.active:
-                logging.info("Recording stopped successfully")
-                self.recording = False
-            else:
-                logging.error("Failed to stop recording: Stream is still active")
         except Exception as e:
             logging.error(f"Error stopping recording: {str(e)}")
             logging.error(traceback.format_exc())
@@ -514,7 +485,7 @@ class AdvancedAudioRecorderApp(rumps.App):
     def check_recording_state(self, _):
         if self.recording:
             if self.stream is None or not self.stream.active:
-                logging.warning("Recording flag is True but stream is not active. Correcting state.")
+                logging.error("Recording flag is True but stream is not active. Correcting state.")
                 self.recording = False
                 self.update_menu_and_icon()
         else:
