@@ -528,7 +528,6 @@ class AdvancedAudioRecorderApp(rumps.App):
             for item in self.menu:
                 if isinstance(item, rumps.MenuItem) and item.title.startswith("Update Available"):
                     self.menu.remove(item)
-                    # Also remove the separator that follows it
                     if len(self.menu) > 0 and self.menu[-1] is None:
                         self.menu.remove(self.menu[-1])
             
@@ -537,23 +536,15 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Add timestamp to URL to prevent caching
             cache_buster = int(time.time())
             url_with_cache_buster = f"{self.update_url}?{cache_buster}"
-            print(f"Fetching version from: {url_with_cache_buster}")
             
             response = urllib.request.urlopen(url_with_cache_buster, context=context)
             latest_version = response.read().decode('utf-8').strip()
-            
-            print(f"Current version: {self.version}")
-            print(f"Latest version from Gist: {latest_version}")
             
             # Convert version strings to tuples for proper comparison
             current = tuple(map(int, self.version.split('.')))
             latest = tuple(map(int, latest_version.split('.')))
             
-            print(f"As tuples - Current: {current}, Latest: {latest}")
-            print(f"Is latest > current? {latest > current}")
-            
             if latest > current:
-                print("Update is needed")
                 # Add new update menu item
                 update_item = rumps.MenuItem(
                     f"Update Available ({latest_version})",
@@ -568,7 +559,6 @@ class AdvancedAudioRecorderApp(rumps.App):
                     message="Click to download the latest version"
                 )
             else:
-                print("No update needed")
                 rumps.notification(
                     title="SoundGrabber",
                     subtitle="No Updates Available",
@@ -576,9 +566,13 @@ class AdvancedAudioRecorderApp(rumps.App):
                 )
                 
         except Exception as e:
-            print(f"Network error: {str(e)}")
             logging.error(f"Error checking for updates: {e}")
-    
+            rumps.notification(
+                title="SoundGrabber",
+                subtitle="Update Check Failed",
+                message="Could not check for updates. Please try again later."
+            )
+
     def download_update(self, _):
         try:
             # For now, just show a message since we don't have the Gumroad URL yet
