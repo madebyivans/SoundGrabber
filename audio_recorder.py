@@ -34,6 +34,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import messagebox
 import AppKit
+import ssl
 
 def resource_path(relative_path):
     try:
@@ -77,12 +78,18 @@ class AdvancedAudioRecorderApp(rumps.App):
         request_microphone_access()
         self.previous_input_device = None
         rumps.Timer(self.check_recording_state, 5).start()
+        
+        # Update these URLs
+        self.version = "1.0.0"  # Current version
+        self.update_url = "https://gist.githubusercontent.com/madebyivans/71d1f0660a3ea7db84dc5263d2cd834e/raw/soundgrabber_version.txt"
+        self.download_url = "https://app.gumroad.com/l/your-product"  # We'll update this once you have your Gumroad product
 
     def setup_logging(self):
         app_directory = os.path.dirname(os.path.abspath(__file__))
         log_file = os.path.join(app_directory, 'audio_recorder.log')
-        logging.basicConfig(filename=log_file, level=logging.ERROR,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.basicConfig(filename=log_file, 
+                           level=logging.INFO,  # Changed from ERROR to INFO
+                           format='%(asctime)s - %(levelname)s - %(message)s')
 
     def load_settings(self):
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
@@ -517,35 +524,69 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def check_for_updates(self, sender=None):
         try:
-            response = urllib.request.urlopen(self.update_url)
+            # Remove existing update menu item if it exists
+            for item in self.menu:
+                if isinstance(item, rumps.MenuItem) and item.title.startswith("Update Available"):
+                    self.menu.remove(item)
+                    # Also remove the separator that follows it
+                    if len(self.menu) > 0 and self.menu[-1] is None:
+                        self.menu.remove(self.menu[-1])
+            
+            context = ssl._create_unverified_context()
+            
+            # Add timestamp to URL to prevent caching
+            cache_buster = int(time.time())
+            url_with_cache_buster = f"{self.update_url}?{cache_buster}"
+            print(f"Fetching version from: {url_with_cache_buster}")
+            
+            response = urllib.request.urlopen(url_with_cache_buster, context=context)
             latest_version = response.read().decode('utf-8').strip()
             
-            if latest_version > self.version:
-                # Remove existing update menu item if it exists
-                for item in self.menu:
-                    if isinstance(item, rumps.MenuItem) and item.title.startswith("Update Available"):
-                        self.menu.remove(item)
-                
+            print(f"Current version: {self.version}")
+            print(f"Latest version from Gist: {latest_version}")
+            
+            # Convert version strings to tuples for proper comparison
+            current = tuple(map(int, self.version.split('.')))
+            latest = tuple(map(int, latest_version.split('.')))
+            
+            print(f"As tuples - Current: {current}, Latest: {latest}")
+            print(f"Is latest > current? {latest > current}")
+            
+            if latest > current:
+                print("Update is needed")
                 # Add new update menu item
                 update_item = rumps.MenuItem(
                     f"Update Available ({latest_version})",
                     callback=self.download_update
                 )
-                # Insert before the last separator and Quit
                 self.menu.insert_before("Quit", update_item)
                 self.menu.insert_before("Quit", None)  # Add separator
                 
-                logging.info(f"New version {latest_version} available")
+                rumps.notification(
+                    title="SoundGrabber Update Available",
+                    subtitle=f"Version {latest_version} is available",
+                    message="Click to download the latest version"
+                )
             else:
-                logging.info("No updates available")
+                print("No update needed")
+                rumps.notification(
+                    title="SoundGrabber",
+                    subtitle="No Updates Available",
+                    message=f"You're running the latest version ({self.version})"
+                )
                 
         except Exception as e:
+            print(f"Network error: {str(e)}")
             logging.error(f"Error checking for updates: {e}")
     
     def download_update(self, _):
         try:
-            webbrowser.open(self.download_url)
-            logging.info("Opening download page")
+            # For now, just show a message since we don't have the Gumroad URL yet
+            rumps.notification(
+                title="SoundGrabber",
+                subtitle="Update Download",
+                message="Gumroad link will be available soon"
+            )
         except Exception as e:
             logging.error(f"Error opening download page: {e}")
 
