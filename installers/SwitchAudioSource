@@ -1,0 +1,2 @@
+#!/bin/bash
+exec "/opt/homebrew/Cellar/switchaudio-osx/1.2.2/SwitchAudioSource" "$@"

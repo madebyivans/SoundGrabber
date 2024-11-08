@@ -1,10 +1,16 @@
 # Third-Party Software Attributions
 
-## BlackHole Virtual Audio Driver
-- Copyright (C) 2019-2024 Existential Audio Inc.
-- Website: https://existential.audio/blackhole/
-- License: GNU General Public License v3.0
-- Source code: https://github.com/ExistentialAudio/BlackHole
+This software includes the following third-party components:
 
-BlackHole is included in this distribution under the terms of the GNU General Public License v3.0.
-The complete text of the license can be found at: https://www.gnu.org/licenses/gpl-3.0.html
+## BlackHole 2ch
+- Copyright (C) 2019-2024 Existential Audio Inc.
+- License: GPL-3.0
+- Source: https://github.com/ExistentialAudio/BlackHole
+- License text included in: licenses/blackhole-LICENSE
+
+## SwitchAudioSource
+- Copyright (c) 2008-2023 Devon Weller
+- Copyright (c) 2011-2023 Christian Speich
+- License: MIT
+- Source: https://github.com/deweller/switchaudio-osx
+- License text included in: licenses/switchaudio-osx-LICENSE

@@ -31,8 +31,6 @@ import objc
 import traceback  # Add this import
 import urllib.request
 import webbrowser
-import tkinter as tk
-from tkinter import messagebox
 import AppKit
 import ssl
 
@@ -63,6 +61,17 @@ class AdvancedAudioRecorderApp(rumps.App):
         
         super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
         self.setup_logging()
+        
+        # Add dependency check here
+        if not self.check_dependencies():
+            logging.warning("Required dependencies not installed. Exiting...")
+            rumps.notification(
+                title="SoundGrabber",
+                subtitle="Setup Required",
+                message="Please restart SoundGrabber after installing the required components."
+            )
+            sys.exit(0)
+        
         self.settings = self.load_settings()
         self.recording = False
         self.audio_data = []
@@ -596,27 +605,84 @@ class AdvancedAudioRecorderApp(rumps.App):
                     'BlackHole2ch-0.6.0.pkg'
                 )
                 
-                # Create and hide the root window
-                root = tk.Tk()
-                root.withdraw()
+                # Replace tkinter dialog with NSAlert
+                alert = AppKit.NSAlert.alloc().init()
+                alert.setMessageText_("BlackHole Not Found")
+                alert.setInformativeText_("SoundGrabber requires BlackHole 2ch to function. Would you like to install it now?")
+                alert.addButtonWithTitle_("Install")
+                alert.addButtonWithTitle_("Cancel")
                 
-                # Show the message box
-                response = messagebox.askquestion(
-                    "BlackHole Not Found",
-                    "SoundGrabber requires BlackHole 2ch to function. Would you like to install it now?",
-                    icon='warning'
-                )
+                response = alert.runModal()
                 
-                # Clean up the root window
-                root.destroy()
-                
-                if response == 'yes':
+                if response == AppKit.NSAlertFirstButtonReturn:  # "Install" clicked
                     subprocess.run(['open', installer_path])
                     return False
+                return False
             return True
         except Exception as e:
             logging.error(f"Error checking BlackHole installation: {e}")
             return False
+
+    def check_switchaudio_installed(self):
+        try:
+            installer_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 
+                'installers', 
+                'SwitchAudioSource'
+            )
+            
+            if self.find_switch_audio_source():
+                return True
+                
+            if os.path.exists(installer_path):
+                # Replace tkinter dialog with NSAlert
+                alert = AppKit.NSAlert.alloc().init()
+                alert.setMessageText_("SwitchAudioSource Not Found")
+                alert.setInformativeText_("SoundGrabber requires SwitchAudioSource to function. Would you like to install it now?")
+                alert.addButtonWithTitle_("Install")
+                alert.addButtonWithTitle_("Cancel")
+                
+                response = alert.runModal()
+                
+                if response == AppKit.NSAlertFirstButtonReturn:  # "Install" clicked
+                    os.chmod(installer_path, 0o755)
+                    
+                    cmd = [
+                        'osascript', '-e', 
+                        f'do shell script "cp {installer_path} /usr/local/bin/SwitchAudioSource && chmod 755 /usr/local/bin/SwitchAudioSource" with administrator privileges'
+                    ]
+                    
+                    try:
+                        subprocess.run(cmd, check=True)
+                        return True
+                    except subprocess.CalledProcessError:
+                        logging.error("Failed to install SwitchAudioSource")
+                        return False
+                return False
+            else:
+                logging.error("SwitchAudioSource installer not found in bundle")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error checking SwitchAudioSource installation: {e}")
+            return False
+
+    def check_dependencies(self):
+        # First check BlackHole
+        blackhole_ok = self.check_blackhole_installed()
+        if not blackhole_ok:
+            logging.info("Waiting for BlackHole installation...")
+            time.sleep(5)  # Give some time for the installer to start
+            return False
+
+        # Then check SwitchAudioSource
+        switchaudio_ok = self.check_switchaudio_installed()
+        if not switchaudio_ok:
+            logging.info("Waiting for SwitchAudioSource installation...")
+            time.sleep(2)  # Give some time for the installer to start
+            return False
+
+        return True
 
 if __name__ == "__main__":
     try:

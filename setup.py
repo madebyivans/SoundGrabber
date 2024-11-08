@@ -22,8 +22,19 @@ APP = ['audio_recorder.py']
 DATA_FILES = [
     'icon.icns',
     'icon_recording.icns',
-    ('resources', ['resources/start_recording.wav', 'resources/stop_recording.wav']),
-    ('installers', ['installers/BlackHole2ch-0.6.0.pkg']),
+    ('resources', [
+        'resources/start_recording.wav',
+        'resources/stop_recording.wav',
+        'resources/version.txt'
+    ]),
+    ('installers', [
+        'installers/BlackHole2ch-0.6.0.pkg',
+        'installers/SwitchAudioSource'
+    ]),
+    ('licenses', [
+        'licenses/switchaudio-osx-LICENSE',
+        'licenses/blackhole-LICENSE'
+    ]),
     'LICENSE',
     'ATTRIBUTION.md',
 ]
