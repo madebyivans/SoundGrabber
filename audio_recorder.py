@@ -33,13 +33,8 @@ import urllib.request
 import webbrowser
 import AppKit
 import ssl
-
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from setup_wizard import SetupWizard
+from utils import resource_path  # Import from utils instead of defining it here
 
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
@@ -62,15 +57,10 @@ class AdvancedAudioRecorderApp(rumps.App):
         super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
         self.setup_logging()
         
-        # Add dependency check here
-        if not self.check_dependencies():
-            logging.warning("Required dependencies not installed. Exiting...")
-            rumps.notification(
-                title="SoundGrabber",
-                subtitle="Setup Required",
-                message="Please restart SoundGrabber after installing the required components."
-            )
-            sys.exit(0)
+        # Check if setup is needed
+        if self.needs_setup():
+            logging.info("First-time setup needed...")
+            self.run_setup_wizard()
         
         self.settings = self.load_settings()
         self.recording = False
@@ -683,6 +673,58 @@ class AdvancedAudioRecorderApp(rumps.App):
             return False
 
         return True
+
+    def needs_setup(self):
+        """Check if any components need to be set up"""
+        try:
+            # Check BlackHole
+            devices = sd.query_devices()
+            blackhole_exists = any('BlackHole 2ch' in str(device['name']) for device in devices)
+            if not blackhole_exists:
+                return True
+                
+            # Check SwitchAudioSource
+            result = subprocess.run(['which', 'SwitchAudioSource'], 
+                                 capture_output=True, text=True)
+            if result.returncode != 0:
+                return True
+                
+            # Check Multi-Output Device
+            result = subprocess.run(['SwitchAudioSource', '-a'], 
+                                 capture_output=True, text=True)
+            if "SoundGrabber" not in result.stdout:
+                return True
+                
+            return False
+            
+        except Exception as e:
+            logging.error(f"Error checking setup requirements: {e}")
+            return True
+
+    def run_setup_wizard(self):
+        """Run the setup wizard"""
+        try:
+            logging.info("Starting setup wizard...")
+            wizard = SetupWizard()
+            wizard.show()
+            
+            # Run the wizard's event loop
+            AppKit.NSApp.run()
+            
+            # After wizard completes, verify everything is set up
+            if self.needs_setup():
+                logging.error("Setup incomplete")
+                rumps.notification(
+                    title="SoundGrabber",
+                    subtitle="Setup Required",
+                    message="Please complete the setup process before using SoundGrabber."
+                )
+                AppKit.NSApp.terminate_(None)  # Properly quit the app
+        
+        except Exception as e:
+            logging.error(f"Error during setup wizard: {e}")
+            logging.error(traceback.format_exc())
+            AppKit.NSApp.terminate_(None)  # Properly quit on error
 
 if __name__ == "__main__":
     try:

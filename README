@@ -12,8 +12,10 @@ SoundGrabber is available for purchase at [your store link]. While the source co
 2. Unzip the file
 3. Right-click (or Control-click) SoundGrabber.app and select "Open"
 4. Click "Open" in the security dialog that appears
-5. If BlackHole is not installed, SoundGrabber will prompt you to install it
-6. Follow the BlackHole installer prompts when they appear
+5. SoundGrabber will automatically check for required components:
+   - If BlackHole is not installed, you'll be prompted to install it
+   - If SwitchAudioSource is not installed, it will be installed automatically
+6. Follow any installer prompts that appear
 7. Restart your Mac after BlackHole installation (recommended)
 
 ## Usage
@@ -27,6 +29,7 @@ SoundGrabber is available for purchase at [your store link]. While the source co
 
 - macOS 10.15 or later
 - Microphone permissions (will be requested on first use)
+- Administrator password may be required for component installation
 
 ## License
 
@@ -38,7 +41,11 @@ SoundGrabber's source code is licensed under the GNU General Public License v3 (
 
 ## Attribution
 
-This software includes BlackHole (https://existential.audio/blackhole/), which is licensed under the GNU General Public License v3.0.
+This software includes:
+- BlackHole (https://existential.audio/blackhole/) - Licensed under GNU General Public License v3.0
+- SwitchAudioSource (https://github.com/deweller/switchaudio-osx) - Licensed under MIT License
+
+Complete license texts are included in the application bundle under the 'licenses' directory.
 
 ## Support
 
