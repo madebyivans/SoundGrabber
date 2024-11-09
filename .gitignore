@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 audio_recorder.log
 .DS_Store
+timer-build/
