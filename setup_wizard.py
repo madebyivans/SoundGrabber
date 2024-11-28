@@ -5,13 +5,38 @@ import time
 from utils import resource_path
 import logging
 import traceback
+import json
+import plistlib
 
 class SetupWizard:
     def __init__(self):
         try:
+            # Set up logging first
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+            log_file = os.path.join(app_dir, 'setup_wizard.log')
+            logging.basicConfig(
+                filename=log_file,
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s'
+            )
+            logging.info("Starting Setup Wizard...")
+
+            # Set up the switch_audio_source_path FIRST
+            self.switch_audio_source_path = os.path.join(app_dir, 'resources', 'SwitchAudioSource')
+            logging.info(f"SwitchAudioSource path: {self.switch_audio_source_path}")
+            
+            if not os.path.exists(self.switch_audio_source_path):
+                logging.error(f"SwitchAudioSource not found at {self.switch_audio_source_path}")
+            else:
+                logging.info("SwitchAudioSource found")
+
+            # Initialize status flags AFTER switch_audio_source_path is set
+            self.blackhole_installed = self.check_blackhole_installed()
+            self.soundgrabber_device_setup = self.check_multi_output_device()
+            
             # Set up the application
             app = AppKit.NSApplication.sharedApplication()
-            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)  # Show in dock
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
             
             # Set the dock icon
             icon_path = resource_path("icon.icns")
@@ -21,10 +46,12 @@ class SetupWizard:
             
             # Initialize the rest of the wizard
             self.current_step = 0
+            
+            # Modify steps to be dynamic based on what's already installed
             self.steps = [
                 {
                     "title": "Welcome to SoundGrabber!",
-                    "text": "Let's set up your audio recording environment. This will take about 3 minutes.",
+                    "text": "Let's set up your audio recording environment. This will take about 2 minutes.",
                     "image": "welcome.png",
                     "button": "Start Setup"
                 },
@@ -32,28 +59,23 @@ class SetupWizard:
                     "title": "Step 1: Install BlackHole",
                     "text": """First, we'll install BlackHole, which allows SoundGrabber to capture system audio.
 
-When the installer appears, follow the prompts and enter your password when asked.""",
+When the installer appears, follow the prompts and enter your password when asked.""" if not self.blackhole_installed else "BlackHole is already installed!",
                     "image": "blackhole_install.png",
-                    "button": "Install BlackHole"
+                    "button": "Continue" if self.blackhole_installed else "Install BlackHole"
                 },
                 {
-                    "title": "Step 2: Install SwitchAudio",
-                    "text": """Now we'll install SwitchAudio, which helps manage your audio devices.
+                    "title": "Step 2: Create Multi-Output Device",
+                    "text": """Please set up your audio output:
 
-This will be installed automatically when you click the button.""",
-                    "image": "switchaudio_install.png",
-                    "button": "Install SwitchAudio"
-                },
-                {
-                    "title": "Step 3: Create Multi-Output Device",
-                    "text": """Finally, let's set up your audio output:
-
-1. Click the '+' button in the bottom left
+1. Click '+' in bottom left
 2. Select 'Create Multi-Output Device'
 3. Name it 'SoundGrabber'
-4. Check both 'BlackHole 2ch' and your speakers""",
+4. ✓ Check both 'BlackHole 2ch' and your speakers
+5. Make sure BlackHole 2ch is checked!
+
+Click 'Continue' when done.""",
                     "image": "audio_midi_setup.png",
-                    "button": "Open Audio Setup"
+                    "button": "Open Audio Setup" if not self.soundgrabber_device_setup else "Continue"
                 },
                 {
                     "title": "Setup Complete!",
@@ -81,6 +103,7 @@ This will be installed automatically when you click the button.""",
             logging.info("Setup wizard initialized, creating window...")
             self.setup_window()
             logging.info("Setup wizard window created successfully")
+            
         except Exception as e:
             logging.error(f"Failed to initialize setup wizard: {e}")
             logging.error(traceback.format_exc())
@@ -95,22 +118,25 @@ This will be installed automatically when you click the button.""",
             print(f"Error checking BlackHole: {e}")
             return False
 
-    def check_switchaudio_installed(self):
-        try:
-            result = subprocess.run(['which', 'SwitchAudioSource'], 
-                                 capture_output=True, text=True)
-            return result.returncode == 0
-        except Exception as e:
-            print(f"Error checking SwitchAudioSource: {e}")
-            return False
-
     def check_multi_output_device(self):
         try:
-            result = subprocess.run(['SwitchAudioSource', '-a'], 
+            # Check if SoundGrabber exists
+            result = subprocess.run([self.switch_audio_source_path, '-a'], 
                                  capture_output=True, text=True)
-            return "SoundGrabber" in result.stdout
+            
+            logging.info(f"Available audio devices:\n{result.stdout}")
+            
+            # Exact match check for "SoundGrabber"
+            if "SoundGrabber" not in result.stdout.split('\n'):
+                logging.info("SoundGrabber device not found in audio devices list")
+                return False
+            
+            logging.info("Found SoundGrabber device")
+            return True
+                
         except Exception as e:
-            print(f"Error checking Multi-Output device: {e}")
+            logging.error(f"Error checking Multi-Output device: {e}")
+            logging.error(traceback.format_exc())
             return False
 
     def verify_step(self):
@@ -119,12 +145,7 @@ This will be installed automatically when you click the button.""",
                 self.show_error("BlackHole Installation", 
                               "BlackHole doesn't appear to be installed yet. Please complete the installation.")
                 return False
-        elif self.current_step == 2:  # SwitchAudio
-            if not self.check_switchaudio_installed():
-                self.show_error("SwitchAudio Installation", 
-                              "SwitchAudio doesn't appear to be installed yet. Please wait for the installation to complete.")
-                return False
-        elif self.current_step == 3:  # Multi-Output Device
+        elif self.current_step == 2:  # Multi-Output Device
             if not self.check_multi_output_device():
                 self.show_error("Audio Setup", 
                               "The 'SoundGrabber' Multi-Output Device hasn't been created yet. Please complete the setup.")
@@ -219,41 +240,39 @@ This will be installed automatically when you click the button.""",
         
     def nextStep_(self, sender):
         if self.current_step == 1:  # BlackHole installation
-            self.install_blackhole()
-            # Give time for the installer to appear and complete
-            time.sleep(2)  # Wait for installer to open
-            alert = AppKit.NSAlert.alloc().init()
-            alert.setMessageText_("Installing BlackHole")
-            alert.setInformativeText_("Please complete the BlackHole installation and click OK when finished.")
-            alert.addButtonWithTitle_("OK")
-            alert.runModal()
+            if not self.blackhole_installed:
+                self.install_blackhole()
+                # Give time for the installer to appear
+                time.sleep(2)
             
-        elif self.current_step == 2:  # SwitchAudio installation
-            self.install_switchaudio()
-            time.sleep(2)  # Wait for installation to complete
-            
-        elif self.current_step == 3:  # Multi-Output setup
-            self.setup_audio()
-            alert = AppKit.NSAlert.alloc().init()
-            alert.setMessageText_("Setting up Audio Device")
-            alert.setInformativeText_("Please create the Multi-Output Device and click OK when finished.")
-            alert.addButtonWithTitle_("OK")
-            alert.runModal()
+        elif self.current_step == 2:  # Multi-Output setup
+            if sender.title() == "Open Audio Setup":
+                self.setup_audio()
+                sender.setTitle_("Continue")
+                return
+            else:  # Button says "Continue"
+                if not self.check_multi_output_device():
+                    self.show_error_and_reopen_audio_setup(
+                        "Audio Setup Incomplete", 
+                        """Please ensure:
+
+1. A Multi-Output Device named exactly 'SoundGrabber' exists
+2. Both BlackHole 2ch and your speakers are checked
+3. BlackHole 2ch is enabled (checked) in the device
+
+Need help? Check the image above for reference."""
+                    )
+                    return
         
-        # Only verify after user confirms completion
-        if not self.verify_step():
-            return
-            
         self.current_step += 1
         if self.current_step < len(self.steps):
             self.update_content()
         else:
-            # Verify all components before finishing
+            # Final verification
             if (self.check_blackhole_installed() and 
-                self.check_switchaudio_installed() and 
                 self.check_multi_output_device()):
                 self.window.close()
-                AppKit.NSApp.terminate_(None)  # Add this line to properly quit
+                AppKit.NSApp.terminate_(None)
             else:
                 self.show_error("Setup Incomplete", 
                               "Some components are not properly installed. Please complete all steps.")
@@ -269,25 +288,24 @@ This will be installed automatically when you click the button.""",
         subprocess.run(['open', installer_path])
         time.sleep(1)  # Give time for installer to open
 
-    def install_switchaudio(self):
-        installer_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 
-            'installers', 
-            'SwitchAudioSource'
-        )
-        try:
-            os.chmod(installer_path, 0o755)
-            cmd = [
-                'osascript', '-e', 
-                f'do shell script "cp {installer_path} /usr/local/bin/SwitchAudioSource && chmod 755 /usr/local/bin/SwitchAudioSource" with administrator privileges'
-            ]
-            subprocess.run(cmd, check=True)
-        except Exception as e:
-            self.show_error("Installation Error", f"Failed to install SwitchAudioSource: {str(e)}")
-
     def setup_audio(self):
-        subprocess.run(['open', '-a', 'Audio MIDI Setup'])
-        
+        """Open Audio MIDI Setup and bring it to front"""
+        try:
+            # Simple open and activate
+            subprocess.run(['open', '-a', 'Audio MIDI Setup'])
+            time.sleep(0.5)  # Give time for app to launch
+            
+            script = """
+            tell application "Audio MIDI Setup"
+                activate
+            end tell
+            """
+            subprocess.run(['osascript', '-e', script])
+            
+        except Exception as e:
+            logging.error(f"Failed to open Audio MIDI Setup: {e}")
+            logging.error(traceback.format_exc())
+
     def show(self):
         try:
             logging.info("Showing setup wizard window...")
@@ -299,6 +317,22 @@ This will be installed automatically when you click the button.""",
             logging.error(f"Failed to show setup wizard: {e}")
             logging.error(traceback.format_exc())
             raise
+
+    def show_error_and_reopen_audio_setup(self, title, message):
+        """Shows error dialog and reopens Audio MIDI Setup"""
+        alert = AppKit.NSAlert.alloc().init()
+        alert.setMessageText_(title)
+        alert.setInformativeText_("""Please ensure:
+
+1. A Multi-Output Device named exactly 'SoundGrabber' exists
+2. Both BlackHole 2ch and your preferred listening device are checked
+
+Need help? Check the image above for reference or send an email to a.ivans@icloud.com""")
+        alert.addButtonWithTitle_("OK")
+        alert.runModal()
+        
+        # Reopen/bring to front Audio MIDI Setup
+        self.setup_audio()
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()

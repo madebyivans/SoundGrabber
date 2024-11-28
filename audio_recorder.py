@@ -57,26 +57,29 @@ class AdvancedAudioRecorderApp(rumps.App):
         super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
         self.setup_logging()
         
+        # Initialize switch_audio_source_path FIRST
+        self.switch_audio_source_path = self.find_switch_audio_source()
+        
         # Check if setup is needed
-        if self.needs_setup():
+        setup_needed = self.needs_setup()
+        if setup_needed:
             logging.info("First-time setup needed...")
             self.run_setup_wizard()
-        
-        self.settings = self.load_settings()
-        self.recording = False
-        self.audio_data = []
-        self.fs = 48000
-        self.channels = 2
-        self.stream = None
-        self.switch_audio_source_path = self.find_switch_audio_source()
-        if not self.switch_audio_source_path:
-            logging.error("SwitchAudioSource not found. Audio device switching will not work.")
-        self.previous_output_device = None
-        self.last_recorded_file = None
-        self.setup_menu()
-        request_microphone_access()
-        self.previous_input_device = None
-        rumps.Timer(self.check_recording_state, 5).start()
+        else:
+            logging.info("All requirements met, starting main app...")
+            # Continue with normal app initialization
+            self.settings = self.load_settings()
+            self.recording = False
+            self.audio_data = []
+            self.fs = 48000
+            self.channels = 2
+            self.stream = None
+            self.previous_output_device = None
+            self.last_recorded_file = None
+            self.setup_menu()
+            request_microphone_access()
+            self.previous_input_device = None
+            rumps.Timer(self.check_recording_state, 5).start()
         
         # Update these URLs
         self.version = "1.0.0"  # Current version
@@ -307,15 +310,24 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.debug(f"Recorded chunk shape: {indata.shape}, min: {np.min(indata)}, max: {np.max(indata)}")
 
     def find_switch_audio_source(self):
-        possible_paths = [
-            "/usr/local/bin/SwitchAudioSource",
-            "/opt/homebrew/bin/SwitchAudioSource",
-            "/usr/bin/SwitchAudioSource"
-        ]
-        for path in possible_paths:
-            if os.path.exists(path):
-                return path
-        return None
+        """Look for SwitchAudioSource in multiple locations"""
+        try:
+            # First check in our resources directory
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+            local_path = os.path.join(app_dir, 'resources', 'SwitchAudioSource')
+            if os.path.exists(local_path) and os.access(local_path, os.X_OK):
+                return local_path
+
+            # Fallback to system path
+            result = subprocess.run(['which', 'SwitchAudioSource'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.strip()
+                
+            return None
+        except Exception as e:
+            logging.error(f"Error finding SwitchAudioSource: {e}")
+            return None
 
     def get_current_output_device(self):
         if self.switch_audio_source_path:
@@ -615,43 +627,11 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def check_switchaudio_installed(self):
         try:
-            installer_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), 
-                'installers', 
-                'SwitchAudioSource'
-            )
-            
             if self.find_switch_audio_source():
                 return True
                 
-            if os.path.exists(installer_path):
-                # Replace tkinter dialog with NSAlert
-                alert = AppKit.NSAlert.alloc().init()
-                alert.setMessageText_("SwitchAudioSource Not Found")
-                alert.setInformativeText_("SoundGrabber requires SwitchAudioSource to function. Would you like to install it now?")
-                alert.addButtonWithTitle_("Install")
-                alert.addButtonWithTitle_("Cancel")
-                
-                response = alert.runModal()
-                
-                if response == AppKit.NSAlertFirstButtonReturn:  # "Install" clicked
-                    os.chmod(installer_path, 0o755)
-                    
-                    cmd = [
-                        'osascript', '-e', 
-                        f'do shell script "cp {installer_path} /usr/local/bin/SwitchAudioSource && chmod 755 /usr/local/bin/SwitchAudioSource" with administrator privileges'
-                    ]
-                    
-                    try:
-                        subprocess.run(cmd, check=True)
-                        return True
-                    except subprocess.CalledProcessError:
-                        logging.error("Failed to install SwitchAudioSource")
-                        return False
-                return False
-            else:
-                logging.error("SwitchAudioSource installer not found in bundle")
-                return False
+            logging.error("SwitchAudioSource not found in resources or system path")
+            return False
                 
         except Exception as e:
             logging.error(f"Error checking SwitchAudioSource installation: {e}")
@@ -683,14 +663,8 @@ class AdvancedAudioRecorderApp(rumps.App):
             if not blackhole_exists:
                 return True
                 
-            # Check SwitchAudioSource
-            result = subprocess.run(['which', 'SwitchAudioSource'], 
-                                 capture_output=True, text=True)
-            if result.returncode != 0:
-                return True
-                
             # Check Multi-Output Device
-            result = subprocess.run(['SwitchAudioSource', '-a'], 
+            result = subprocess.run([self.switch_audio_source_path, '-a'], 
                                  capture_output=True, text=True)
             if "SoundGrabber" not in result.stdout:
                 return True
