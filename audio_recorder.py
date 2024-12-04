@@ -148,7 +148,6 @@ class AdvancedAudioRecorderApp(rumps.App):
             rumps.MenuItem("Show Last Recording", callback=self.show_last_recording_in_finder),
             None,  # Separator
             rumps.MenuItem("Edit Settings", callback=self.edit_settings),
-            rumps.MenuItem("Reload Settings", callback=self.reload_settings),
             None,  # Separator
             rumps.MenuItem("Check for Updates", callback=self.check_for_updates),
             None,  # Separator
@@ -163,6 +162,13 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def start_recording(self):
         try:
+            # Quick settings reload before recording
+            try:
+                self.settings = self.load_settings()
+            except Exception as e:
+                logging.warning(f"Could not reload settings, using existing values: {e}")
+                # Continue with existing settings rather than failing
+                
             self.apply_settings()
             self.channels = 2
             self.audio_data = []
