@@ -35,6 +35,7 @@ import AppKit
 import ssl
 from setup_wizard import SetupWizard
 from utils import resource_path  # Import from utils instead of defining it here
+import atexit
 
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
@@ -46,6 +47,8 @@ def request_microphone_access():
 
 class AdvancedAudioRecorderApp(rumps.App):
     def __init__(self):
+        atexit.register(self.cleanup_on_exit)
+        
         self.icon_path = resource_path("icon.icns")
         self.icon_recording_path = resource_path("icon_recording.icns")
         
@@ -162,25 +165,29 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def start_recording(self):
         try:
+            # Store current devices BEFORE any changes
+            self.previous_input_device = self.get_current_input_device()
+            self.previous_output_device = self.get_current_output_device()
+            logging.info(f"Initial input device: {self.previous_input_device}")
+            logging.info(f"Initial output device: {self.previous_output_device}")
+            
             # Quick settings reload before recording
             try:
                 self.settings = self.load_settings()
             except Exception as e:
                 logging.warning(f"Could not reload settings, using existing values: {e}")
-                # Continue with existing settings rather than failing
                 
             self.apply_settings()
             self.channels = 2
             self.audio_data = []
             
+            # Set BlackHole 2ch input gain to -1 dB before initializing stream
+            self.set_blackhole_gain(-1)
+            
             # Initialize stream before device switch
             self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
                                        dtype='int32', device='BlackHole 2ch',
                                        callback=self.audio_callback)
-            
-            # Store current devices
-            self.previous_input_device = self.get_current_input_device()
-            self.previous_output_device = self.get_current_output_device()
             
             # Switch devices first
             self.switch_devices("BlackHole 2ch", "SoundGrabber")
@@ -211,7 +218,14 @@ class AdvancedAudioRecorderApp(rumps.App):
             if self.audio_data:
                 self.save_audio_file()
             
-            self.switch_devices(self.previous_input_device, self.previous_output_device)
+            # Restore previous devices
+            if self.previous_input_device:
+                self.switch_input_device(self.previous_input_device)
+                logging.info(f"Restored input device to: {self.previous_input_device}")
+            
+            if self.previous_output_device:
+                self.switch_to_device(self.previous_output_device)
+                logging.info(f"Restored output device to: {self.previous_output_device}")
             
             self.play_sound('stop_recording.wav')
             
@@ -358,7 +372,17 @@ class AdvancedAudioRecorderApp(rumps.App):
         self.switch_to_device("SoundGrabber")
 
     def quit_app(self, _):
-        rumps.quit_application()
+        try:
+            # Run cleanup before quitting
+            self.cleanup_on_exit()
+            
+            # Then quit the application
+            rumps.quit_application()
+        except Exception as e:
+            logging.error(f"Error during quit: {e}")
+            logging.error(traceback.format_exc())
+            # Still try to quit even if cleanup fails
+            rumps.quit_application()
 
     def trim_silence_int32(self, audio_array, threshold_db=-60, min_silence_ms=2):
         threshold_linear = int(10 ** (threshold_db / 20) * np.iinfo(np.int32).max)
@@ -705,6 +729,73 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.error(f"Error during setup wizard: {e}")
             logging.error(traceback.format_exc())
             AppKit.NSApp.terminate_(None)  # Properly quit on error
+
+    def set_blackhole_gain(self, gain_db):
+        try:
+            # Switch to BlackHole first
+            subprocess.run([self.switch_audio_source_path, "-t", "input", "-s", "BlackHole 2ch"], check=True)
+            
+            # Convert dB to a percentage (assuming -1 dB is approximately 89% volume)
+            gain_percent = max(0, min(100, 100 + gain_db))  # Ensure the value is between 0 and 100
+            
+            # Use AppleScript to set the input volume
+            apple_script = f'''
+            tell application "System Events"
+                set volume input volume {gain_percent}
+            end tell
+            '''
+            
+            # Get volume before change
+            before_vol = subprocess.run(['osascript', '-e', 'get volume settings'], 
+                                      capture_output=True, text=True).stdout.strip()
+            
+            # Set the volume
+            subprocess.run(['osascript', '-e', apple_script], check=True)
+            
+            # Get volume after change
+            after_vol = subprocess.run(['osascript', '-e', 'get volume settings'], 
+                                     capture_output=True, text=True).stdout.strip()
+            
+            logging.info(f"BlackHole 2ch volume adjustment - Before: {before_vol}, After: {after_vol}")
+            
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error setting BlackHole gain: {e}")
+            logging.error(f"Command output: {e.output if hasattr(e, 'output') else 'No output'}")
+        except Exception as e:
+            logging.error(f"Unexpected error setting BlackHole gain: {e}")
+            logging.error(traceback.format_exc())
+
+    def cleanup_on_exit(self):
+        try:
+            if self.recording:
+                logging.info("Application exiting while recording, restoring audio devices...")
+                if hasattr(self, 'previous_input_device') and self.previous_input_device:
+                    self.switch_input_device(self.previous_input_device)
+                    logging.info(f"Restored input device to: {self.previous_input_device}")
+                
+                if hasattr(self, 'previous_output_device') and self.previous_output_device:
+                    self.switch_to_device(self.previous_output_device)
+                    logging.info(f"Restored output device to: {self.previous_output_device}")
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+            logging.error(traceback.format_exc())
+
+    def terminate_(self, sender):
+        try:
+            if self.recording:
+                logging.info("Application exiting while recording, restoring audio devices...")
+                if hasattr(self, 'previous_input_device') and self.previous_input_device:
+                    self.switch_input_device(self.previous_input_device)
+                    logging.info(f"Restored input device to: {self.previous_input_device}")
+                
+                if hasattr(self, 'previous_output_device') and self.previous_output_device:
+                    self.switch_to_device(self.previous_output_device)
+                    logging.info(f"Restored output device to: {self.previous_output_device}")
+        except Exception as e:
+            logging.error(f"Error during terminate: {e}")
+            logging.error(traceback.format_exc())
+        finally:
+            super().terminate_(sender)
 
 if __name__ == "__main__":
     try:
