@@ -86,8 +86,8 @@ class AdvancedAudioRecorderApp(rumps.App):
         
         # Update these URLs
         self.version = "1.0.0"  # Current version
-        self.update_url = "https://gist.githubusercontent.com/madebyivans/71d1f0660a3ea7db84dc5263d2cd834e/raw/soundgrabber_version.txt"
-        self.download_url = "https://app.gumroad.com/l/your-product"  # We'll update this once you have your Gumroad product
+        self.update_url = "https://raw.githubusercontent.com/madebyivans/SoundGrabber/main/version.txt"
+        self.download_url = "https://github.com/madebyivans/SoundGrabber/releases"  # Updated to GitHub releases
 
     def setup_logging(self):
         app_directory = os.path.dirname(os.path.abspath(__file__))
@@ -563,43 +563,57 @@ class AdvancedAudioRecorderApp(rumps.App):
     def periodic_check(self, _):
         logging.info("Periodic check: Application is still running")
 
-    def check_for_updates(self, sender=None):
+    def check_for_updates(self, sender=None, silent=False):
         try:
             # Remove existing update menu item if it exists
-            for item in self.menu:
+            for item in list(self.menu):
                 if isinstance(item, rumps.MenuItem) and item.title.startswith("Update Available"):
                     self.menu.remove(item)
-                    if len(self.menu) > 0 and self.menu[-1] is None:
-                        self.menu.remove(self.menu[-1])
+        
+            # Bypass SSL verification
+            import ssl
+            ssl._create_default_https_context = ssl._create_unverified_context
             
-            context = ssl._create_unverified_context()
+            # Use GitHub API instead of raw file
+            api_url = "https://api.github.com/repos/madebyivans/SoundGrabber/contents/version.txt"
             
-            # Add timestamp to URL to prevent caching
-            cache_buster = int(time.time())
-            url_with_cache_buster = f"{self.update_url}?{cache_buster}"
+            logging.info(f"Checking for updates at URL: {api_url}")
             
-            response = urllib.request.urlopen(url_with_cache_buster, context=context)
+            request = urllib.request.Request(
+                api_url,
+                headers={
+                    'User-Agent': 'SoundGrabber',
+                    'Accept': 'application/vnd.github.v3.raw'
+                }
+            )
+            
+            response = urllib.request.urlopen(request, timeout=10)
             latest_version = response.read().decode('utf-8').strip()
             
-            # Convert version strings to tuples for proper comparison
+            logging.info(f"Latest version from server: {latest_version}")
+            
+            # Convert version strings to tuples for comparison
             current = tuple(map(int, self.version.split('.')))
             latest = tuple(map(int, latest_version.split('.')))
+            logging.info(f"Comparing versions - Current: {current}, Latest: {latest}")
             
             if latest > current:
-                # Add new update menu item
-                update_item = rumps.MenuItem(
-                    f"Update Available ({latest_version})",
-                    callback=self.download_update
+                # Add update menu item above the separator before "Quit"
+                self.menu.insert_before(
+                    "Check for Updates",
+                    rumps.MenuItem(
+                        f"Update Available ({latest_version})",
+                        callback=self.download_update
+                    )
                 )
-                self.menu.insert_before("Quit", update_item)
-                self.menu.insert_before("Quit", None)  # Add separator
                 
-                rumps.notification(
-                    title="SoundGrabber Update Available",
-                    subtitle=f"Version {latest_version} is available",
-                    message="Click to download the latest version"
-                )
-            else:
+                if not silent:
+                    rumps.notification(
+                        title="SoundGrabber Update Available",
+                        subtitle=f"Version {latest_version} is available",
+                        message="Click 'Update Available' in the menu to download."
+                    )
+            elif not silent:
                 rumps.notification(
                     title="SoundGrabber",
                     subtitle="No Updates Available",
@@ -607,21 +621,18 @@ class AdvancedAudioRecorderApp(rumps.App):
                 )
                 
         except Exception as e:
-            logging.error(f"Error checking for updates: {e}")
-            rumps.notification(
-                title="SoundGrabber",
-                subtitle="Update Check Failed",
-                message="Could not check for updates. Please try again later."
-            )
+            logging.error(f"Error checking for updates: {str(e)}")
+            logging.error(traceback.format_exc())
+            if not silent:
+                rumps.notification(
+                    title="SoundGrabber",
+                    subtitle="Update Check Failed",
+                    message="Could not check for updates. Please try again later."
+                )
 
-    def download_update(self, _):
+    def download_update(self, sender=None):
         try:
-            # For now, just show a message since we don't have the Gumroad URL yet
-            rumps.notification(
-                title="SoundGrabber",
-                subtitle="Update Download",
-                message="Gumroad link will be available soon"
-            )
+            webbrowser.open(self.download_url)
         except Exception as e:
             logging.error(f"Error opening download page: {e}")
 
@@ -800,6 +811,7 @@ class AdvancedAudioRecorderApp(rumps.App):
 if __name__ == "__main__":
     try:
         app = AdvancedAudioRecorderApp()
+        app.check_for_updates(silent=True)  # Silent update check
         app.run()
     except Exception as e:
         error_message = f"SoundGrabber encountered an unexpected error: {str(e)}"
