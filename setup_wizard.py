@@ -111,11 +111,19 @@ Click 'Continue' when done.""",
         
     def check_blackhole_installed(self):
         try:
-            import sounddevice as sd
-            devices = sd.query_devices()
-            return any('BlackHole 2ch' in str(device['name']) for device in devices)
+            # First try using switchaudio-source to list devices
+            result = subprocess.run([self.switch_audio_source_path, '-a'], 
+                                  capture_output=True, text=True)
+            
+            if 'BlackHole 2ch' in result.stdout:
+                logging.info("BlackHole 2ch found in audio devices list")
+                return True
+            
+            logging.info("BlackHole 2ch device not found")
+            return False
         except Exception as e:
-            print(f"Error checking BlackHole: {e}")
+            logging.error(f"Error checking BlackHole: {e}")
+            logging.error(traceback.format_exc())
             return False
 
     def check_multi_output_device(self):
@@ -243,7 +251,7 @@ Click 'Continue' when done.""",
             if not self.blackhole_installed:
                 self.install_blackhole()
                 # Give time for the installer to appear
-                time.sleep(2)
+                time.sleep(5)  # Allow time for system to recognize the driver
             
         elif self.current_step == 2:  # Multi-Output setup
             if sender.title() == "Open Audio Setup":
@@ -268,9 +276,13 @@ Need help? Check the image above for reference."""
         if self.current_step < len(self.steps):
             self.update_content()
         else:
-            # Final verification
-            if (self.check_blackhole_installed() and 
-                self.check_multi_output_device()):
+            # Refresh both checks without restarting Core Audio
+            blackhole_check = self.check_blackhole_installed()
+            multioutput_check = self.check_multi_output_device()
+            
+            logging.info(f"Final verification - BlackHole installed: {blackhole_check}, MultiOutput setup: {multioutput_check}")
+            
+            if blackhole_check and multioutput_check:
                 self.window.close()
                 AppKit.NSApp.terminate_(None)
             else:
