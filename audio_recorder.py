@@ -100,7 +100,7 @@ class AdvancedAudioRecorderApp(rumps.App):
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
         settings = {
             'output_folder': os.path.expanduser('~/Desktop'),
-            'file_prefix': 'recording_',
+            'recording_name': 'recording',
             'sample_rate': 48000
         }
         try:
@@ -287,21 +287,21 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Normalize audio to float range [-1, 1]
             audio_array_normalized = final_audio.astype(np.float32) / np.iinfo(np.int32).max
 
-            # Get list of existing files with same prefix
-            prefix = self.settings['file_prefix']
+            # Get list of existing files with same name
+            recording_name = self.settings['recording_name']
             output_folder = self.settings['output_folder']
             
-            # Get all files that match the pattern prefix_XX.wav
+            # Get all files that match the pattern name_XX.wav
             existing_files = [f for f in os.listdir(output_folder) 
-                             if f.startswith(prefix) and f.endswith('.wav') 
-                             and f[len(prefix):].startswith('_')]
+                             if f.startswith(recording_name) and f.endswith('.wav') 
+                             and f[len(recording_name):].startswith('_')]
             
             # Extract existing numbers
             used_numbers = set()
             for filename in existing_files:
                 try:
-                    # Extract number between prefix_ and .wav
-                    num_str = filename[len(prefix)+1:-4]  # remove prefix_, .wav
+                    # Extract number between name_ and .wav
+                    num_str = filename[len(recording_name)+1:-4]  # remove name_, .wav
                     if num_str.isdigit():
                         used_numbers.add(int(num_str))
                 except:
@@ -313,7 +313,7 @@ class AdvancedAudioRecorderApp(rumps.App):
                 number += 1
             
             # Create filename with padded number
-            filename = f"{prefix}_{number:02d}.wav"
+            filename = f"{recording_name}_{number:02d}.wav"
             filepath = os.path.join(output_folder, filename)
             
             os.makedirs(output_folder, exist_ok=True)
@@ -467,7 +467,7 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def show_last_recording_in_finder(self, _):
         output_folder = self.settings['output_folder']
-        prefix = self.settings['file_prefix']
+        prefix = self.settings['recording_name']
         
         if not os.path.exists(output_folder):
             logging.error("Recording folder not found")

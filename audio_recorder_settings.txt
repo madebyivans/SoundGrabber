@@ -1,5 +1,4 @@
 # Supported sample rates: 44100, 48000
 sample_rate=48000
 output_folder=/Users/ivans/Desktop
-file_prefix=yoyo
-first_run_completed=False
+recording_name=recording
