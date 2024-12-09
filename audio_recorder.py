@@ -1,6 +1,11 @@
 """
 SoundGrabber - Audio Recording Utility
+Version 1.0.0
 Copyright (C) 2024 Ivans Andrejevs
+
+Website: www.madebyivans.info
+Repository: https://github.com/madebyivans/SoundGrabber
+Contact: a.ivans@icloud.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
