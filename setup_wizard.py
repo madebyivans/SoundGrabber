@@ -262,12 +262,14 @@ Click 'Continue' when done.""",
         self.button.layer().setCornerRadius_(8.0)
         self.button.layer().setBorderWidth_(0)
         
-        # Use system accent color but lighter
-        lighter_blue = AppKit.NSColor.systemBlueColor().blendedColorWithFraction_ofColor_(
-            0.3,  # Blend 30% with white
-            AppKit.NSColor.whiteColor()
+        # Create a lighter blue that matches standard macOS buttons
+        mac_button_blue = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(
+            0.2,    # Red - keeping low for blue
+            0.5,    # Green - moderate for lighter blue
+            1.0,    # Blue - full blue
+            1.0     # Alpha
         )
-        self.button.setBezelColor_(lighter_blue)
+        self.button.setBezelColor_(mac_button_blue)
         
         # Ensure button stays visible when window is inactive
         self.button.setShowsBorderOnlyWhileMouseInside_(False)
