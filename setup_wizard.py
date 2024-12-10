@@ -241,36 +241,37 @@ Click 'Continue' when done.""",
         
         # Create button with system default styling
         self.button = AppKit.NSButton.alloc().initWithFrame_(
-            AppKit.NSMakeRect(640, 40, 120, 36)
+            AppKit.NSMakeRect(600, 40, 160, 44)
         )
         
-        # Try a different button type
-        self.button.setBezelStyle_(AppKit.NSBezelStyleRounded)  # Changed to Rounded
+        # Use system default style
+        self.button.setBezelStyle_(0)  # NSBezelStyleRounded = 0
         self.button.setButtonType_(AppKit.NSButtonTypeMomentaryPushIn)
-        self.button.setBordered_(False)
         
         # Set button properties
         self.button.setTitle_("Start Setup")
         self.button.setTarget_(self)
         self.button.setAction_("nextStep:")
         
-        # Set font
-        self.button.setFont_(AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold))
+        # Get the button cell and modify its properties
+        button_cell = self.button.cell()
+        button_cell.setControlSize_(AppKit.NSControlSizeLarge)  # Try to force large size
         
-        # Set the gray color that worked well
+        # Set the button style
         self.button.setWantsLayer_(True)
         self.button.layer().setCornerRadius_(8.0)
         self.button.layer().setBorderWidth_(0)
-        self.button.layer().setMasksToBounds_(True)
-        self.button.layer().setBackgroundColor_(
-            AppKit.NSColor.systemGrayColor().CGColor()
-        )
         
-        # Add subtle shadow
-        self.button.layer().setShadowColor_(AppKit.NSColor.blackColor().CGColor())
-        self.button.layer().setShadowOffset_(AppKit.NSMakeSize(0, 2))
-        self.button.layer().setShadowOpacity_(0.2)
-        self.button.layer().setShadowRadius_(4.0)
+        # Use system accent color but lighter
+        lighter_blue = AppKit.NSColor.systemBlueColor().blendedColorWithFraction_ofColor_(
+            0.3,  # Blend 30% with white
+            AppKit.NSColor.whiteColor()
+        )
+        self.button.setBezelColor_(lighter_blue)
+        
+        # Ensure button stays visible when window is inactive
+        self.button.setShowsBorderOnlyWhileMouseInside_(False)
+        button_cell.setBackgroundStyle_(0)
         
         # White text
         attrs = {
@@ -280,9 +281,10 @@ Click 'Continue' when done.""",
         title_string = AppKit.NSAttributedString.alloc().initWithString_attributes_("Start Setup", attrs)
         self.button.setAttributedTitle_(title_string)
         
-        # Make sure button is in front and clickable
-        self.button.setWantsLayer_(True)
-        self.button.layer().setZPosition_(1)
+        # Debug: Print actual frame and cell size
+        actual_frame = self.button.frame()
+        logging.info(f"Button frame: {actual_frame}")
+        logging.info(f"Button cell size: {button_cell.controlSize()}")
         
         # Add views in correct order
         self.content.addSubview_(self.button)
