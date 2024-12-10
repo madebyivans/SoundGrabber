@@ -31,7 +31,8 @@ DATA_FILES = [
         'resources/setup/welcome.png',
         'resources/setup/blackhole_install.png',
         'resources/setup/audio_midi_setup.png',
-        'resources/setup/complete.png'
+        'resources/setup/complete.png',
+        'resources/setup/background.png'
     ]),
     ('installers', [
         'installers/BlackHole2ch-0.6.0.pkg',

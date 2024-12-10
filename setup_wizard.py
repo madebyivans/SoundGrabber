@@ -191,15 +191,24 @@ Click 'Continue' when done.""",
         self.window.setTitlebarAppearsTransparent_(True)
         self.window.setMovableByWindowBackground_(True)
         
-        # Create content view with same background color
+        # Create content view
         self.content = AppKit.NSView.alloc().initWithFrame_(
             AppKit.NSMakeRect(0, 0, 800, 600)
         )
         self.content.setWantsLayer_(True)
-        self.content.layer().setBackgroundColor_(background_color.CGColor())
-        self.content.layer().setCornerRadius_(12.0)
         
-        # Update text colors to dark for better contrast
+        # Add background image first
+        background_image_path = resource_path(os.path.join("resources", "setup", "background.png"))
+        if os.path.exists(background_image_path):
+            background_image = AppKit.NSImage.alloc().initWithContentsOfFile_(background_image_path)
+            background_imageview = AppKit.NSImageView.alloc().initWithFrame_(
+                AppKit.NSMakeRect(0, 0, 800, 600)
+            )
+            background_imageview.setImage_(background_image)
+            background_imageview.setImageScaling_(AppKit.NSImageScaleAxesIndependently)
+            self.content.addSubview_(background_imageview)
+        
+        # Create content view with same background color
         self.title_label = AppKit.NSTextField.alloc().initWithFrame_(
             AppKit.NSMakeRect(40, 520, 720, 40)
         )
@@ -230,47 +239,56 @@ Click 'Continue' when done.""",
         self.text_view.setFont_(AppKit.NSFont.systemFontOfSize_(14))
         self.text_view.setTextColor_(AppKit.NSColor.blackColor())  # Dark text
         
-        # Add modern button with refined style
+        # Create button with system default styling
         self.button = AppKit.NSButton.alloc().initWithFrame_(
-            AppKit.NSMakeRect(640, 40, 120, 32)
+            AppKit.NSMakeRect(640, 40, 120, 36)
         )
-        self.button.setWantsLayer_(True)
-        self.button.layer().setCornerRadius_(16.0)
         
-        # Light gray background
-        button_bg_color = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(
-            0.85,   # Light gray
-            0.85,
-            0.85,
-            1.0
-        )
-        self.button.layer().setBackgroundColor_(button_bg_color.CGColor())
-        
-        # Add subtle shadow for depth
-        self.button.layer().setShadowColor_(AppKit.NSColor.blackColor().CGColor())
-        self.button.layer().setShadowOffset_(AppKit.NSMakeSize(0, 1))
-        self.button.layer().setShadowOpacity_(0.1)
-        self.button.layer().setShadowRadius_(2.0)
-        
+        # Try a different button type
+        self.button.setBezelStyle_(AppKit.NSBezelStyleRounded)  # Changed to Rounded
+        self.button.setButtonType_(AppKit.NSButtonTypeMomentaryPushIn)
         self.button.setBordered_(False)
+        
+        # Set button properties
+        self.button.setTitle_("Start Setup")
         self.button.setTarget_(self)
         self.button.setAction_("nextStep:")
         
-        # Set button title with darker, bolder text
-        button_title = AppKit.NSAttributedString.alloc().initWithString_attributes_(
-            "Start Setup",
-            {
-                AppKit.NSForegroundColorAttributeName: AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.2, 0.2, 0.2, 1.0),  # Darker text
-                AppKit.NSFontAttributeName: AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold)  # Semibold weight
-            }
-        )
-        self.button.setAttributedTitle_(button_title)
+        # Set font
+        self.button.setFont_(AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold))
         
-        # Add all views to content
+        # Set the gray color that worked well
+        self.button.setWantsLayer_(True)
+        self.button.layer().setCornerRadius_(8.0)
+        self.button.layer().setBorderWidth_(0)
+        self.button.layer().setMasksToBounds_(True)
+        self.button.layer().setBackgroundColor_(
+            AppKit.NSColor.systemGrayColor().CGColor()
+        )
+        
+        # Add subtle shadow
+        self.button.layer().setShadowColor_(AppKit.NSColor.blackColor().CGColor())
+        self.button.layer().setShadowOffset_(AppKit.NSMakeSize(0, 2))
+        self.button.layer().setShadowOpacity_(0.2)
+        self.button.layer().setShadowRadius_(4.0)
+        
+        # White text
+        attrs = {
+            AppKit.NSFontAttributeName: AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold),
+            AppKit.NSForegroundColorAttributeName: AppKit.NSColor.whiteColor()
+        }
+        title_string = AppKit.NSAttributedString.alloc().initWithString_attributes_("Start Setup", attrs)
+        self.button.setAttributedTitle_(title_string)
+        
+        # Make sure button is in front and clickable
+        self.button.setWantsLayer_(True)
+        self.button.layer().setZPosition_(1)
+        
+        # Add views in correct order
+        self.content.addSubview_(self.button)
         self.content.addSubview_(self.title_label)
         self.content.addSubview_(self.image_view)
         self.content.addSubview_(self.text_view)
-        self.content.addSubview_(self.button)
         
         self.window.setContentView_(self.content)
         self.update_content()
