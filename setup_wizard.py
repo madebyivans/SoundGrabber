@@ -168,64 +168,103 @@ Click 'Continue' when done.""",
         alert.runModal()
         
     def setup_window(self):
-        # Create window with larger dimensions
+        # Create window with larger dimensions and rounded corners
         self.window = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             AppKit.NSMakeRect(0, 0, 800, 600),
             AppKit.NSWindowStyleMaskTitled | 
             AppKit.NSWindowStyleMaskClosable | 
-            AppKit.NSWindowStyleMaskMiniaturizable,
+            AppKit.NSWindowStyleMaskMiniaturizable |
+            AppKit.NSWindowStyleMaskFullSizeContentView,
             AppKit.NSBackingStoreBuffered,
             False
         )
         
-        # Set window to terminate app when closed
-        self.window.setReleasedWhenClosed_(True)
+        # Set window and content appearance to match image background color #F3F4F6
+        background_color = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(
+            243/255,  # 0.953
+            244/255,  # 0.957
+            246/255,  # 0.965
+            1.0
+        )
         
-        # Add window delegate to handle closing
-        class WindowDelegate(AppKit.NSObject):
-            def windowWillClose_(self, notification):
-                AppKit.NSApp.terminate_(None)
+        self.window.setBackgroundColor_(background_color)
+        self.window.setTitlebarAppearsTransparent_(True)
+        self.window.setMovableByWindowBackground_(True)
         
-        self.window_delegate = WindowDelegate.alloc().init()
-        self.window.setDelegate_(self.window_delegate)
-        
-        # Create content view
+        # Create content view with same background color
         self.content = AppKit.NSView.alloc().initWithFrame_(
             AppKit.NSMakeRect(0, 0, 800, 600)
         )
+        self.content.setWantsLayer_(True)
+        self.content.layer().setBackgroundColor_(background_color.CGColor())
+        self.content.layer().setCornerRadius_(12.0)
         
-        # Add title label
+        # Update text colors to dark for better contrast
         self.title_label = AppKit.NSTextField.alloc().initWithFrame_(
-            AppKit.NSMakeRect(40, 520, 720, 40)  # Adjusted position
+            AppKit.NSMakeRect(40, 520, 720, 40)
         )
         self.title_label.setBezeled_(False)
         self.title_label.setDrawsBackground_(False)
         self.title_label.setEditable_(False)
-        self.title_label.setFont_(AppKit.NSFont.boldSystemFontOfSize_(24))  # Larger font
+        self.title_label.setFont_(AppKit.NSFont.systemFontOfSize_weight_(24, AppKit.NSFontWeightSemibold))
+        self.title_label.setTextColor_(AppKit.NSColor.blackColor())  # Dark text
         
-        # Add image view with larger dimensions
+        # Add image view with shadow
         self.image_view = AppKit.NSImageView.alloc().initWithFrame_(
-            AppKit.NSMakeRect(40, 180, 720, 320)  # Larger image area
+            AppKit.NSMakeRect(40, 180, 720, 320)
         )
         self.image_view.setWantsLayer_(True)
-        self.image_view.layer().setBackgroundColor_(AppKit.NSColor.lightGrayColor().CGColor())
+        self.image_view.layer().setCornerRadius_(8.0)  # Rounded corners for image
+        self.image_view.layer().setShadowColor_(AppKit.NSColor.blackColor().CGColor())
+        self.image_view.layer().setShadowOffset_(AppKit.NSMakeSize(0, -2))
+        self.image_view.layer().setShadowOpacity_(0.2)
+        self.image_view.layer().setShadowRadius_(10.0)
         
-        # Add text view
+        # Add text view with system font
         self.text_view = AppKit.NSTextField.alloc().initWithFrame_(
-            AppKit.NSMakeRect(40, 100, 720, 60)  # Adjusted position
+            AppKit.NSMakeRect(40, 100, 720, 60)
         )
         self.text_view.setBezeled_(False)
         self.text_view.setDrawsBackground_(False)
         self.text_view.setEditable_(False)
         self.text_view.setFont_(AppKit.NSFont.systemFontOfSize_(14))
+        self.text_view.setTextColor_(AppKit.NSColor.blackColor())  # Dark text
         
-        # Add button
+        # Add modern button with refined style
         self.button = AppKit.NSButton.alloc().initWithFrame_(
-            AppKit.NSMakeRect(640, 40, 120, 32)  # Adjusted position
+            AppKit.NSMakeRect(640, 40, 120, 32)
         )
-        self.button.setBezelStyle_(AppKit.NSBezelStyleRounded)
+        self.button.setWantsLayer_(True)
+        self.button.layer().setCornerRadius_(16.0)
+        
+        # Light gray background
+        button_bg_color = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(
+            0.85,   # Light gray
+            0.85,
+            0.85,
+            1.0
+        )
+        self.button.layer().setBackgroundColor_(button_bg_color.CGColor())
+        
+        # Add subtle shadow for depth
+        self.button.layer().setShadowColor_(AppKit.NSColor.blackColor().CGColor())
+        self.button.layer().setShadowOffset_(AppKit.NSMakeSize(0, 1))
+        self.button.layer().setShadowOpacity_(0.1)
+        self.button.layer().setShadowRadius_(2.0)
+        
+        self.button.setBordered_(False)
         self.button.setTarget_(self)
         self.button.setAction_("nextStep:")
+        
+        # Set button title with darker, bolder text
+        button_title = AppKit.NSAttributedString.alloc().initWithString_attributes_(
+            "Start Setup",
+            {
+                AppKit.NSForegroundColorAttributeName: AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.2, 0.2, 0.2, 1.0),  # Darker text
+                AppKit.NSFontAttributeName: AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold)  # Semibold weight
+            }
+        )
+        self.button.setAttributedTitle_(button_title)
         
         # Add all views to content
         self.content.addSubview_(self.title_label)
