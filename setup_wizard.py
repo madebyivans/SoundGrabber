@@ -11,9 +11,9 @@ import plistlib
 class SetupWizard:
     def __init__(self):
         try:
-            # Set up logging first
+            # Set up logging to use audio_recorder.log
             app_dir = os.path.dirname(os.path.abspath(__file__))
-            log_file = os.path.join(app_dir, 'setup_wizard.log')
+            log_file = os.path.join(app_dir, 'audio_recorder.log')  # Use the same log file
             logging.basicConfig(
                 filename=log_file,
                 level=logging.INFO,
@@ -243,8 +243,18 @@ Click 'Continue' when done.""",
         self.text_view.setStringValue_(step["text"])
         self.button.setTitle_(step["button"])
         
-        # Image would be loaded here, but for now we'll show a placeholder
-        self.image_view.setImage_(None)
+        # Load the image for the current step
+        image_path = resource_path(os.path.join("resources", "setup", step["image"]))
+        logging.info(f"Attempting to load image: {image_path}")
+        
+        if os.path.exists(image_path):
+            logging.info(f"Image found: {image_path}")
+            image = AppKit.NSImage.alloc().initWithContentsOfFile_(image_path)
+            self.image_view.setImage_(image)
+        else:
+            logging.warning(f"Image not found: {image_path}")
+            logging.warning(f"Directory contents: {os.listdir(os.path.dirname(image_path))}")
+            self.image_view.setImage_(None)
         
     def nextStep_(self, sender):
         if self.current_step == 1:  # BlackHole installation

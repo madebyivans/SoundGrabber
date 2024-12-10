@@ -25,10 +25,11 @@ DATA_FILES = [
     ('resources', [
         'resources/start_recording.wav',
         'resources/stop_recording.wav',
-        'resources/version.txt',
+        'resources/version.txt'
+    ]),
+    ('resources/setup', [
         'resources/setup/welcome.png',
         'resources/setup/blackhole_install.png',
-        'resources/setup/switchaudio_install.png',
         'resources/setup/audio_midi_setup.png',
         'resources/setup/complete.png'
     ]),
