@@ -67,13 +67,10 @@ When the installer appears, follow the prompts and enter your password when aske
                     "title": "Step 2: Create Multi-Output Device",
                     "text": """Please set up your audio output:
 
-1. Click '+' in bottom left
-2. Select 'Create Multi-Output Device'
-3. Name it 'SoundGrabber'
-4. ✓ Check both 'BlackHole 2ch' and your speakers
-5. Make sure BlackHole 2ch is checked!
-
-Click 'Continue' when done.""",
+1. Click '+' in bottom left and select 'Create Multi-Output Device'
+2. Double click the title of 'Multi-Output Device'
+3. Rename it to 'SoundGrabber'
+4. Tick 'Use' for both BlackHole 2ch and your speakers""",
                     "image": "audio_midi_setup.png",
                     "button": "Open Audio Setup" if not self.soundgrabber_device_setup else "Continue"
                 },
@@ -208,9 +205,9 @@ Click 'Continue' when done.""",
             background_imageview.setImageScaling_(AppKit.NSImageScaleAxesIndependently)
             self.content.addSubview_(background_imageview)
         
-        # Create content view with same background color
+        # Create title label with original position
         self.title_label = AppKit.NSTextField.alloc().initWithFrame_(
-            AppKit.NSMakeRect(40, 520, 720, 40)
+            AppKit.NSMakeRect(40, 520, 720, 40)  # Back to original height
         )
         self.title_label.setBezeled_(False)
         self.title_label.setDrawsBackground_(False)
@@ -229,19 +226,40 @@ Click 'Continue' when done.""",
         self.image_view.layer().setShadowOpacity_(0.2)
         self.image_view.layer().setShadowRadius_(10.0)
         
-        # Add text view with system font
+        # Add text view with lower position
         self.text_view = AppKit.NSTextField.alloc().initWithFrame_(
-            AppKit.NSMakeRect(40, 100, 720, 60)
+            AppKit.NSMakeRect(40, 20, 520, 140)  # Keep at lower position
         )
         self.text_view.setBezeled_(False)
         self.text_view.setDrawsBackground_(False)
         self.text_view.setEditable_(False)
-        self.text_view.setFont_(AppKit.NSFont.systemFontOfSize_(14))
-        self.text_view.setTextColor_(AppKit.NSColor.blackColor())  # Dark text
+
+        # Set up the fonts
+        bold_font = AppKit.NSFont.boldSystemFontOfSize_(14)
+        regular_font = AppKit.NSFont.systemFontOfSize_(14)
+
+        # Create the text with basic styling
+        self.text_view.setFont_(regular_font)
+        self.text_view.setTextColor_(AppKit.NSColor.blackColor())
+
+        # Set up the text with manual line breaks for spacing
+        text = """Please set up your audio output:
+
+1. Click '+' in bottom left and select 'Create Multi-Output Device'
+2. Double click the title of 'Multi-Output Device'
+3. Rename it to 'SoundGrabber'
+4. Tick 'Use' for both BlackHole 2ch and your speakers"""
+
+        self.text_view.setStringValue_(text)
+
+        # Configure for multiple lines
+        self.text_view.setLineBreakMode_(AppKit.NSLineBreakByWordWrapping)
+        text_cell = self.text_view.cell()
+        text_cell.setWraps_(True)
         
-        # Create button with system default styling
+        # Create button with system default styling (make sure it's on top)
         self.button = AppKit.NSButton.alloc().initWithFrame_(
-            AppKit.NSMakeRect(600, 40, 160, 44)
+            AppKit.NSMakeRect(600, 40, 160, 44)  # Keep button position consistent
         )
         
         # Use system default style

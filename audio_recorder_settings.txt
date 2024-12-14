@@ -1,4 +1,4 @@
 # Supported sample rates: 44100, 48000
 sample_rate=48000
-output_folder=/Users/ivans/Desktop
-recording_name=recording
+output_folder=/Users/ivans/Desktop/MyProject
+recording_name=SFX
