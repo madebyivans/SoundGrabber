@@ -8,6 +8,19 @@ import traceback
 import json
 import plistlib
 
+class WindowDelegate(AppKit.NSObject):
+    def windowShouldClose_(self, sender):
+        alert = AppKit.NSAlert.alloc().init()
+        alert.setMessageText_("Quit Setup?")
+        alert.setInformativeText_("Are you sure you want to quit the setup?")
+        alert.addButtonWithTitle_("Quit")
+        alert.addButtonWithTitle_("Cancel")
+        
+        if alert.runModal() == AppKit.NSAlertFirstButtonReturn:
+            AppKit.NSApp.terminate_(None)
+            return True
+        return False
+
 class SetupWizard:
     def __init__(self):
         try:
@@ -100,6 +113,10 @@ When the installer appears, follow the prompts and enter your password when aske
             logging.info("Setup wizard initialized, creating window...")
             self.setup_window()
             logging.info("Setup wizard window created successfully")
+            
+            # Add delegate to handle window close button
+            self.delegate = WindowDelegate.alloc().init()
+            self.window.setDelegate_(self.delegate)
             
         except Exception as e:
             logging.error(f"Failed to initialize setup wizard: {e}")
@@ -416,6 +433,10 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
         
         # Reopen/bring to front Audio MIDI Setup
         self.setup_audio()
+
+    def close_window(self, sender):
+        # Simple direct quit without confirmation
+        AppKit.NSApp.terminate_(None)
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()
