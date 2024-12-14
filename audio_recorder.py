@@ -138,6 +138,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             rumps.MenuItem("Show Last Recording", callback=self.show_last_recording_in_finder),
             None,  # Separator
             rumps.MenuItem("Edit Settings", callback=self.edit_settings),
+            rumps.MenuItem("Audio MIDI Setup", callback=self.open_audio_midi_setup),
             None,  # Separator
             rumps.MenuItem("Check for Updates", callback=self.check_for_updates),
             None,  # Separator
@@ -239,6 +240,27 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Check if the audio is too short
             if audio_array.shape[0] < 100:  # Adjust this threshold as needed
                 logging.warning("Audio is too short to process")
+                return
+
+            # Check for silence/no signal
+            rms = np.sqrt(np.mean(audio_array**2))
+            if rms < 1e-6:  # Adjust threshold as needed
+                logging.error("No signal detected in recording")
+                
+                # Stop recording first
+                self.menu["Start Recording"].title = "Start Recording"
+                self.icon = self.icon_path
+                self.recording = False
+                
+                # Then show the error message
+                response = rumps.alert(
+                    title="Recording Error",
+                    message="No signal detected. Make sure 'BlackHole 2ch' is enabled in your 'SoundGrabber' Multi-Output Device.",
+                    ok="OK",
+                    cancel="Open Audio MIDI Setup"
+                )
+                if response == False:  # False means cancel button (Open Audio MIDI Setup) was clicked
+                    self.open_audio_midi_setup(None)
                 return
 
             # Trim silence from start and end
@@ -808,6 +830,12 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.error(traceback.format_exc())
         finally:
             super().terminate_(sender)
+
+    def open_audio_midi_setup(self, _):
+        try:
+            subprocess.run(['open', '-a', 'Audio MIDI Setup'])
+        except Exception as e:
+            logging.error(f"Error opening Audio MIDI Setup: {e}")
 
 if __name__ == "__main__":
     try:
