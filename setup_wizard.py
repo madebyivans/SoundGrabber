@@ -7,6 +7,8 @@ import logging
 import traceback
 import json
 import plistlib
+import AVKit
+import AVFoundation
 
 class WindowDelegate(AppKit.NSObject):
     def windowShouldClose_(self, sender):
@@ -91,6 +93,12 @@ When the installer appears, follow the prompts and enter your password when aske
                     "title": "Setup Complete!",
                     "text": "SoundGrabber is now ready to use. Click the menu bar icon to start recording!",
                     "image": "complete.png",
+                    "button": "Continue"
+                },
+                {
+                    "title": "Quick Start Guide",
+                    "text": "Watch this short guide to learn how to use SoundGrabber",
+                    "video": True,  # This flags that this step should show video
                     "button": "Finish"
                 }
             ]
@@ -317,30 +325,46 @@ When the installer appears, follow the prompts and enter your password when aske
     def update_content(self):
         step = self.steps[self.current_step]
         
-        self.title_label.setStringValue_(step["title"])
-        self.text_view.setStringValue_(step["text"])
-        self.button.setTitle_(step["button"])
-        
-        # Load the image for the current step
-        image_path = resource_path(os.path.join("resources", "setup", step["image"]))
-        logging.info(f"Attempting to load image: {image_path}")
-        
-        if os.path.exists(image_path):
-            logging.info(f"Image found: {image_path}")
-            image = AppKit.NSImage.alloc().initWithContentsOfFile_(image_path)
-            self.image_view.setImage_(image)
+        # If it's the video step
+        if step.get("video", False):
+            if hasattr(self, 'image_view'):
+                self.image_view.removeFromSuperview()
+            
+            if not hasattr(self, 'player_view'):
+                player = self.setup_video_player()
+                player.play()
+            
+            # Hide text only for video step
+            self.text_view.setHidden_(True)
+            self.title_label.setHidden_(True)  # Hide the original title
         else:
-            logging.warning(f"Image not found: {image_path}")
-            logging.warning(f"Directory contents: {os.listdir(os.path.dirname(image_path))}")
-            self.image_view.setImage_(None)
+            # Regular step behavior
+            if hasattr(self, 'player_view'):
+                self.player_view.removeFromSuperview()
+                if hasattr(self, 'title_background'):
+                    self.title_background.removeFromSuperview()
+            
+            self.title_label.setHidden_(False)
+            self.title_label.setStringValue_(step["title"])
+            self.button.setTitle_(step["button"])
+            
+            # Show text for non-video steps
+            self.text_view.setHidden_(False)
+            self.text_view.setStringValue_(step["text"])
+            
+            image_path = resource_path(os.path.join("resources", "setup", step["image"]))
+            if os.path.exists(image_path):
+                image = AppKit.NSImage.alloc().initWithContentsOfFile_(image_path)
+                self.image_view.setImage_(image)
+            else:
+                self.image_view.setImage_(None)
         
     def nextStep_(self, sender):
         if self.current_step == 1:  # BlackHole installation
             if not self.blackhole_installed:
                 self.install_blackhole()
-                # Give time for the installer to appear
-                time.sleep(5)  # Allow time for system to recognize the driver
-            
+                time.sleep(5)
+        
         elif self.current_step == 2:  # Multi-Output setup
             if sender.title() == "Open Audio Setup":
                 self.setup_audio()
@@ -364,11 +388,9 @@ Need help? Check the image above for reference."""
         if self.current_step < len(self.steps):
             self.update_content()
         else:
-            # Refresh both checks without restarting Core Audio
+            # Final verification
             blackhole_check = self.check_blackhole_installed()
             multioutput_check = self.check_multi_output_device()
-            
-            logging.info(f"Final verification - BlackHole installed: {blackhole_check}, MultiOutput setup: {multioutput_check}")
             
             if blackhole_check and multioutput_check:
                 self.window.close()
@@ -437,6 +459,138 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
     def close_window(self, sender):
         # Simple direct quit without confirmation
         AppKit.NSApp.terminate_(None)
+
+    def setup_video_player(self):
+        # Create AVPlayerView
+        self.player_view = AVKit.AVPlayerView.alloc().init()
+        
+        # Original video dimensions
+        original_width = 1728
+        original_height = 1080
+        
+        # Use full window height
+        available_height = 600
+        
+        # Calculate width based on aspect ratio to fill height
+        scale = available_height / original_height
+        new_width = original_width * scale
+        
+        # Calculate x offset to center the wider video
+        x_offset = (new_width - 800) / 2 * -1
+        
+        # Position video to fill full height from top to bottom
+        self.player_view.setFrame_(AppKit.NSMakeRect(
+            x_offset,
+            0,              # Start from top
+            new_width,
+            available_height  # Use exact window height
+        ))
+        
+        self.player_view.setWantsLayer_(True)
+        self.player_view.setVideoGravity_(AVFoundation.AVLayerVideoGravityResizeAspectFill)
+        self.player_view.setControlsStyle_(AVKit.AVPlayerViewControlsStyleNone)
+        self.player_view.setShowsFullScreenToggleButton_(False)
+        
+        # Create background for title with Dynamic Island style
+        island_width = 450
+        island_height = 40
+        
+        self.title_background = AppKit.NSVisualEffectView.alloc().initWithFrame_(
+            AppKit.NSMakeRect(
+                (800 - island_width) / 2,  # Exact center
+                600 - island_height,       # Exactly at top
+                island_width,
+                island_height
+            )
+        )
+        self.title_background.setMaterial_(AppKit.NSVisualEffectMaterialUltraDark)
+        self.title_background.setBlendingMode_(AppKit.NSVisualEffectBlendingModeBehindWindow)
+        self.title_background.setState_(AppKit.NSVisualEffectStateActive)
+        self.title_background.setWantsLayer_(True)
+        
+        # Create custom shape for Dynamic Island style
+        path = AppKit.NSBezierPath.bezierPath()
+        
+        # Different radii for top and bottom
+        bottom_radius = 20
+        
+        # Start at top-left with sharp corner
+        path.moveToPoint_(AppKit.NSMakePoint(0, island_height))
+        
+        # Top edge (straight)
+        path.lineToPoint_(AppKit.NSMakePoint(island_width, island_height))
+        
+        # Right edge
+        path.lineToPoint_(AppKit.NSMakePoint(island_width, bottom_radius))
+        
+        # Bottom right corner
+        path.appendBezierPathWithArcFromPoint_toPoint_radius_(
+            AppKit.NSMakePoint(island_width, 0),
+            AppKit.NSMakePoint(0, 0),
+            bottom_radius
+        )
+        
+        # Bottom left corner
+        path.appendBezierPathWithArcFromPoint_toPoint_radius_(
+            AppKit.NSMakePoint(0, 0),
+            AppKit.NSMakePoint(0, island_height),
+            bottom_radius
+        )
+        
+        path.closePath()
+        
+        # Apply the mask
+        mask = AppKit.CAShapeLayer.layer()
+        mask.setPath_(path.CGPath())
+        self.title_background.layer().setMask_(mask)
+        
+        # Create and style title label with exact centering
+        self.title = AppKit.NSTextField.alloc().initWithFrame_(
+            AppKit.NSMakeRect(
+                0,  # No left padding - will center in full width
+                5,  # Vertical centering
+                island_width, # Use full width of background
+                30  # Height
+            )
+        )
+        self.title.setStringValue_("Quick Start Guide")
+        self.title.setBezeled_(False)
+        self.title.setDrawsBackground_(False)
+        self.title.setEditable_(False)
+        self.title.setAlignment_(AppKit.NSTextAlignmentCenter)
+        self.title.setFont_(AppKit.NSFont.systemFontOfSize_weight_(16, AppKit.NSFontWeightMedium))
+        self.title.setTextColor_(AppKit.NSColor.whiteColor())
+        
+        # Add title to background
+        self.title_background.addSubview_(self.title)
+        
+        # Set up video player
+        video_path = resource_path(os.path.join("resources", "setup", "guide.mp4"))
+        video_url = AppKit.NSURL.fileURLWithPath_(video_path)
+        player = AVFoundation.AVPlayer.playerWithURL_(video_url)
+        self.player_view.setPlayer_(player)
+        
+        # Add observer for video completion
+        AppKit.NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
+            self,
+            'videoDidFinish:',
+            AVFoundation.AVPlayerItemDidPlayToEndTimeNotification,
+            player.currentItem()
+        )
+        
+        # Add views in correct order
+        self.content.addSubview_(self.player_view)
+        self.content.addSubview_(self.title_background)
+        
+        # Hide button initially
+        if hasattr(self, 'button'):
+            self.button.setHidden_(True)
+        
+        return player
+
+    def videoDidFinish_(self, notification):
+        if hasattr(self, 'button'):
+            self.button.setHidden_(False)
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()

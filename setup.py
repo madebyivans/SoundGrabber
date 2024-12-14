@@ -32,7 +32,8 @@ DATA_FILES = [
         'resources/setup/blackhole_install.png',
         'resources/setup/audio_midi_setup.png',
         'resources/setup/complete.png',
-        'resources/setup/background.png'
+        'resources/setup/background.png',
+        'resources/setup/guide.mp4'
     ]),
     ('installers', [
         'installers/BlackHole2ch-0.6.0.pkg',
@@ -68,6 +69,8 @@ OPTIONS = {
         'cffi',
         'AppKit',
         'Cocoa',
+        'AVKit',
+        'AVFoundation'
     ],
     'includes': [
         'objc', 
@@ -81,18 +84,19 @@ OPTIONS = {
     ],
     'frameworks': [
         'CoreAudio', 
-        'AVFoundation', 
+        'AVFoundation',
+        'AVKit',
         'ApplicationServices', 
         'Foundation',
-        'AppKit',  # Add AppKit framework explicitly
-        'Cocoa',   # Add Cocoa framework explicitly
+        'AppKit',
+        'Cocoa',
     ],
     'semi_standalone': False,
     'site_packages': True,
 }
 
 setup(
-    name='SoundGrabber',  # Add name
+    name='SoundGrabber',
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
