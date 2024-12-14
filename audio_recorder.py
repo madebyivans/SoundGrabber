@@ -252,14 +252,26 @@ class AdvancedAudioRecorderApp(rumps.App):
                 self.icon = self.icon_path
                 self.recording = False
                 
-                # Then show the error message
-                response = rumps.alert(
-                    title="Recording Error",
-                    message="No signal detected. Make sure 'BlackHole 2ch' is enabled in your 'SoundGrabber' Multi-Output Device.",
-                    ok="OK",
-                    cancel="Open Audio MIDI Setup"
-                )
-                if response == False:  # False means cancel button (Open Audio MIDI Setup) was clicked
+                # Temporarily change activation policy to make app visible
+                app = AppKit.NSApplication.sharedApplication()
+                app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+                
+                # Create and configure NSAlert
+                alert = AppKit.NSAlert.alloc().init()
+                alert.setMessageText_("Recording Error")
+                alert.setInformativeText_("No signal detected. Make sure 'BlackHole 2ch' is enabled in your 'SoundGrabber' Multi-Output Device.")
+                alert.addButtonWithTitle_("OK")
+                alert.addButtonWithTitle_("Open Audio MIDI Setup")
+                
+                # Make sure the alert window comes to front
+                AppKit.NSApp.activateIgnoringOtherApps_(True)
+                
+                response = alert.runModal()
+                
+                # Return to accessory app status after alert is closed
+                app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+                
+                if response == AppKit.NSAlertSecondButtonReturn:  # "Open Audio MIDI Setup" clicked
                     self.open_audio_midi_setup(None)
                 return
 
