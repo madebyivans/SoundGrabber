@@ -105,8 +105,7 @@ class AdvancedAudioRecorderApp(rumps.App):
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
         settings = {
             'output_folder': os.path.expanduser('~/Desktop'),
-            'recording_name': 'recording',
-            'sample_rate': 48000
+            'recording_name': 'recording'
         }
         try:
             with open(settings_path, 'r') as f:
@@ -116,21 +115,7 @@ class AdvancedAudioRecorderApp(rumps.App):
                         parts = line.split('=', 1)
                         if len(parts) == 2:
                             key, value = parts
-                            key = key.strip()
-                            value = value.strip()
-                            if key == 'sample_rate':
-                                try:
-                                    value = int(value)
-                                    if value not in [44100, 48000]:
-                                        logging.warning(f"Unsupported sample rate: {value}. Using default 48000.")
-                                        value = 48000
-                                except ValueError:
-                                    logging.warning(f"Invalid sample rate: {value}. Using default 48000.")
-                                    value = 48000
-                            settings[key] = value
-                        else:
-                            logging.warning(f"Ignoring invalid line in settings file: {line}")
-            self.fs = settings.get('sample_rate', 48000)
+                            settings[key.strip()] = value.strip()
         except FileNotFoundError:
             logging.warning(f"Settings file not found at {settings_path}. Using default settings.")
             self.save_settings(settings)
@@ -144,11 +129,8 @@ class AdvancedAudioRecorderApp(rumps.App):
             settings = self.settings
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
         with open(settings_path, 'w') as f:
-            f.write("# Supported sample rates: 44100, 48000\n")
-            f.write(f"sample_rate={settings.get('sample_rate', 48000)}\n")
             for key, value in settings.items():
-                if key != 'sample_rate':
-                    f.write(f"{key}={value}\n")
+                f.write(f"{key}={value}\n")
 
     def setup_menu(self):
         self.menu = [
@@ -515,20 +497,10 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def apply_settings(self):
         try:
-            if self.settings['sample_rate'] not in [44100, 48000]:
-                logging.warning(f"Unsupported sample rate: {self.settings['sample_rate']}. Using default 48000.")
-                self.settings['sample_rate'] = 48000
-            
-            # Test if the sample rate is supported by the current audio device®®®
-            sd.check_output_settings(samplerate=self.settings['sample_rate'])
+            # Test if audio device is available
+            sd.check_output_settings(samplerate=48000)
         except sd.PortAudioError as e:
             logging.error(f"Error with audio settings: {e}")
-            # Fallback to the other supported sample rate
-            self.settings['sample_rate'] = 44100 if self.settings['sample_rate'] == 48000 else 48000
-            logging.info(f"Falling back to sample rate: {self.settings['sample_rate']}")
-        
-        self.fs = self.settings['sample_rate']
-        # Apply other settings as needed
 
     def get_current_input_device(self):
         if self.switch_audio_source_path:

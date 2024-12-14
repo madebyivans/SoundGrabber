@@ -176,17 +176,9 @@ When the installer appears, follow the prompts and enter your password when aske
             False
         )
         
-        # Set window and content appearance to match image background color #F3F4F6
-        background_color = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(
-            243/255,  # 0.953
-            244/255,  # 0.957
-            246/255,  # 0.965
-            1.0
-        )
-        
-        self.window.setBackgroundColor_(background_color)
-        self.window.setTitlebarAppearsTransparent_(True)
+        # Set window properties once
         self.window.setMovableByWindowBackground_(True)
+        self.window.setTitlebarAppearsTransparent_(True)
         
         # Create content view
         self.content = AppKit.NSView.alloc().initWithFrame_(
@@ -241,16 +233,6 @@ When the installer appears, follow the prompts and enter your password when aske
         # Create the text with basic styling
         self.text_view.setFont_(regular_font)
         self.text_view.setTextColor_(AppKit.NSColor.blackColor())
-
-        # Set up the text with manual line breaks for spacing
-        text = """Please set up your audio output:
-
-1. Click '+' in bottom left and select 'Create Multi-Output Device'
-2. Double click the title of 'Multi-Output Device'
-3. Rename it to 'SoundGrabber'
-4. Tick 'Use' for both BlackHole 2ch and your speakers"""
-
-        self.text_view.setStringValue_(text)
 
         # Configure for multiple lines
         self.text_view.setLineBreakMode_(AppKit.NSLineBreakByWordWrapping)

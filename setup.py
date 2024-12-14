@@ -79,12 +79,13 @@ OPTIONS = {
         'time',
         'logging',
     ],
-    'resources': DATA_FILES,
     'frameworks': [
         'CoreAudio', 
         'AVFoundation', 
         'ApplicationServices', 
-        'Foundation'
+        'Foundation',
+        'AppKit',  # Add AppKit framework explicitly
+        'Cocoa',   # Add Cocoa framework explicitly
     ],
     'semi_standalone': False,
     'site_packages': True,
