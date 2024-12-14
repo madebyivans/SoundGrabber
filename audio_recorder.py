@@ -172,22 +172,35 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Set BlackHole 2ch input gain to -1 dB before initializing stream
             self.set_blackhole_gain(-1)
             
-            # Initialize stream before device switch
+            # Switch devices first
+            self.switch_devices("BlackHole 2ch", "SoundGrabber")
+            
+            # Initialize stream and ensure it's ready
             self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
                                        dtype='int32', device='BlackHole 2ch',
                                        callback=self.audio_callback)
             
-            # Switch devices first
-            self.switch_devices("BlackHole 2ch", "SoundGrabber")
+            # Start stream and verify it's active
+            self.stream.start()
+            if not self.stream.active:
+                raise RuntimeError("Stream failed to start")
             
-            # Play sound
+            # Verify stream is receiving data
+            self.last_callback_time = 0
+            test_start = time.time()
+            while time.time() - test_start < 0.1:  # 100ms timeout
+                if self.last_callback_time > test_start:
+                    break
+            else:
+                logging.warning("Stream may not be receiving data")
+            
+            # Now that stream is confirmed ready, play start sound
             self.play_sound('start_recording.wav')
-            time.sleep(0.135)  # Wait exactly for the sound duration
+            time.sleep(0.135)  # Exact duration of start_recording.wav
             
             # Start recording immediately after sound
             self.recording = True
             self.recording_start_time = time.time()
-            self.stream.start()
             
             self.menu["Start Recording"].title = "Stop Recording"
             self.icon = self.icon_recording_path
@@ -258,8 +271,8 @@ class AdvancedAudioRecorderApp(rumps.App):
                 
                 # Create and configure NSAlert
                 alert = AppKit.NSAlert.alloc().init()
-                alert.setMessageText_("Recording Error")
-                alert.setInformativeText_("No signal detected. Make sure 'BlackHole 2ch' is enabled in your 'SoundGrabber' Multi-Output Device.")
+                alert.setMessageText_("No Signal Recorded")
+                alert.setInformativeText_("If there is a problem with the recording, make sure 'BlackHole 2ch' is enabled in your 'SoundGrabber' Multi-Output Device.")
                 alert.addButtonWithTitle_("OK")
                 alert.addButtonWithTitle_("Open Audio MIDI Setup")
                 
@@ -367,9 +380,10 @@ class AdvancedAudioRecorderApp(rumps.App):
         
         return transients[0] if transients.size > 0 else 0
 
-    def audio_callback(self, indata, frames, time, status):
+    def audio_callback(self, indata, frames, time_info, status):
         if status:
             logging.warning(f"Audio callback status: {status}")
+        self.last_callback_time = time.time()  # Use Python's time instead
         if self.recording:
             self.audio_data.append(indata.copy())
             logging.debug(f"Recorded chunk shape: {indata.shape}, min: {np.min(indata)}, max: {np.max(indata)}")
@@ -572,12 +586,14 @@ class AdvancedAudioRecorderApp(rumps.App):
             if self.stream is None or not self.stream.active:
                 logging.error("Recording flag is True but stream is not active. Correcting state.")
                 self.recording = False
-                self.update_menu_and_icon()
+                self.menu["Start Recording"].title = "Start Recording"
+                self.icon = self.icon_path
         else:
             if self.stream is not None and self.stream.active:
                 logging.warning("Recording flag is False but stream is active. Correcting state.")
                 self.recording = True
-                self.update_menu_and_icon()
+                self.menu["Start Recording"].title = "Stop Recording"
+                self.icon = self.icon_recording_path
 
     def log_app_state(self):
         logging.info(f"Current app state: recording={self.recording}, stream active={self.stream is not None and self.stream.active if self.stream else False}")
