@@ -41,6 +41,8 @@ import ssl
 from setup_wizard import SetupWizard
 from utils import resource_path  # Import from utils instead of defining it here
 import atexit
+import tkinter as tk
+from tkinter import ttk
 
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
@@ -133,11 +135,16 @@ class AdvancedAudioRecorderApp(rumps.App):
                 f.write(f"{key}={value}\n")
 
     def setup_menu(self):
+        # Create Settings submenu
+        settings_submenu = rumps.MenuItem("Edit Settings", callback=self.open_settings_file)  # Main item gets a callback
+        settings_submenu.add(rumps.MenuItem("Choose Output Folder", callback=self.edit_settings))
+        settings_submenu.add(rumps.MenuItem("Set Recording Name", callback=self.edit_recording_name))
+        
         self.menu = [
             rumps.MenuItem("Start Recording", callback=self.toggle_recording),
             rumps.MenuItem("Show Last Recording", callback=self.show_last_recording_in_finder),
             None,  # Separator
-            rumps.MenuItem("Edit Settings", callback=self.edit_settings),
+            settings_submenu,  # Submenu with its own callback
             rumps.MenuItem("Audio MIDI Setup", callback=self.open_audio_midi_setup),
             None,  # Separator
             rumps.MenuItem("Check for Updates", callback=self.check_for_updates),
@@ -153,6 +160,49 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def start_recording(self):
         try:
+            # Quick settings reload and output folder validation
+            try:
+                self.settings = self.load_settings()
+                output_folder = self.settings['output_folder']
+                
+                if not os.path.exists(output_folder):
+                    # Temporarily change activation policy to make alert visible
+                    app = AppKit.NSApplication.sharedApplication()
+                    app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+                    
+                    # Create and configure alert
+                    alert = AppKit.NSAlert.alloc().init()
+                    alert.setMessageText_("Output Folder Not Found")
+                    alert.setInformativeText_(f"The folder '{output_folder}' doesn't exist. Would you like to create it or edit settings?")
+                    alert.addButtonWithTitle_("Create Folder")
+                    alert.addButtonWithTitle_("Edit Settings")
+                    alert.addButtonWithTitle_("Cancel")
+                    
+                    # Make sure the alert window comes to front
+                    AppKit.NSApp.activateIgnoringOtherApps_(True)
+                    
+                    response = alert.runModal()
+                    
+                    # Return to accessory app status
+                    app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+                    
+                    if response == AppKit.NSAlertFirstButtonReturn:  # "Create Folder"
+                        try:
+                            os.makedirs(output_folder, exist_ok=True)
+                            logging.info(f"Created output folder: {output_folder}")
+                        except Exception as e:
+                            logging.error(f"Failed to create output folder: {e}")
+                            return
+                    elif response == AppKit.NSAlertSecondButtonReturn:  # "Edit Settings"
+                        self.edit_settings(None)
+                        return
+                    else:  # "Cancel"
+                        return
+                
+            except Exception as e:
+                logging.warning(f"Could not reload settings or validate output folder: {e}")
+                return
+
             # Store current devices BEFORE any changes
             self.previous_input_device = self.get_current_input_device()
             self.previous_output_device = self.get_current_output_device()
@@ -529,13 +579,46 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def edit_settings(self, _):
         try:
-            settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
-            if not os.path.exists(settings_path):
-                self.save_settings()
+            # Temporarily change activation policy to make app visible
+            app = AppKit.NSApplication.sharedApplication()
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
             
-            subprocess.run(['open', settings_path])
+            # Create panel using openPanel class method
+            panel = AppKit.NSOpenPanel.openPanel()
+            panel.setCanChooseFiles_(False)
+            panel.setCanChooseDirectories_(True)
+            panel.setAllowsMultipleSelection_(False)
+            panel.setCanCreateDirectories_(True)  # Enable New Folder button
+            panel.setTitle_("Choose Recording Output Location")
+            panel.setPrompt_("Select")
+            panel.setMessage_("Choose where to save your recordings")
+            
+            # If there's a current output folder, start there
+            if 'output_folder' in self.settings and os.path.exists(self.settings['output_folder']):
+                panel.setDirectoryURL_(AppKit.NSURL.fileURLWithPath_(self.settings['output_folder']))
+            
+            # Make sure the app comes to front
+            AppKit.NSApp.activateIgnoringOtherApps_(True)
+            
+            # Show the panel
+            if panel.runModal() == AppKit.NSModalResponseOK:
+                # Get the chosen path
+                chosen_path = panel.URLs()[0].path()
+                
+                # Update settings
+                self.settings['output_folder'] = chosen_path
+                self.save_settings()
+                
+                logging.info(f"Updated output folder to: {chosen_path}")
+            else:
+                logging.info("Folder selection cancelled")
+            
+            # Return to accessory app status
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+            
         except Exception as e:
-            logging.error(f"Error opening settings file: {e}")
+            logging.error(f"Error in folder selection: {e}")
+            logging.error(traceback.format_exc())
 
     def reload_settings(self, _):
         try:
@@ -864,6 +947,46 @@ class AdvancedAudioRecorderApp(rumps.App):
             subprocess.run(['open', '-a', 'Audio MIDI Setup'])
         except Exception as e:
             logging.error(f"Error opening Audio MIDI Setup: {e}")
+
+    def edit_recording_name(self, _):
+        try:
+            current_name = self.settings.get('recording_name', 'recording')
+            
+            # Create AppleScript command with basic styling
+            apple_script = f'''
+            tell application "System Events"
+                display dialog "Enter the base name for your recordings:" ¬
+                    default answer "{current_name}" ¬
+                    with title "Set Recording Name" ¬
+                    buttons {{"Cancel", "Save"}} ¬
+                    default button "Save"
+            end tell
+            '''
+            
+            # Run AppleScript and get result
+            result = subprocess.run(['osascript', '-e', apple_script], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode == 0:  # User clicked Save
+                # Parse the result to get the text
+                new_name = result.stdout.strip()
+                if new_name and "text returned:" in new_name:
+                    new_name = new_name.split("text returned:")[1].strip()
+                    self.settings['recording_name'] = new_name
+                    self.save_settings()
+                    logging.info(f"Updated recording name to: {new_name}")
+            
+        except Exception as e:
+            logging.error(f"Error editing recording name: {e}")
+            logging.error(traceback.format_exc())
+
+    def open_settings_file(self, _):
+        try:
+            settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
+            subprocess.run(['open', '-t', settings_path])  # Opens with default text editor
+        except Exception as e:
+            logging.error(f"Error opening settings file: {e}")
+            logging.error(traceback.format_exc())
 
 if __name__ == "__main__":
     try:
