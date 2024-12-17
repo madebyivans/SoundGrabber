@@ -43,6 +43,11 @@ from utils import resource_path  # Import from utils instead of defining it here
 import atexit
 import tkinter as tk
 from tkinter import ttk
+import logging.handlers
+import errno
+import socket  # Add this with the other imports
+import json
+import tempfile
 
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
@@ -54,54 +59,343 @@ def request_microphone_access():
 
 class AdvancedAudioRecorderApp(rumps.App):
     def __init__(self):
-        atexit.register(self.cleanup_on_exit)
-        
-        self.icon_path = resource_path("icon.icns")
-        self.icon_recording_path = resource_path("icon_recording.icns")
-        
-        # Keep only these essential activation settings
-        app = AppKit.NSApplication.sharedApplication()
-        app.activateIgnoringOtherApps_(False)
-        app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
-        
-        super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
-        self.setup_logging()
-        
-        # Initialize switch_audio_source_path FIRST
-        self.switch_audio_source_path = self.find_switch_audio_source()
-        
-        # Check if setup is needed
-        setup_needed = self.needs_setup()
-        if setup_needed:
-            logging.info("First-time setup needed...")
-            self.run_setup_wizard()
-        else:
-            logging.info("All requirements met, starting main app...")
-            # Continue with normal app initialization
-            self.settings = self.load_settings()
+        try:
+            # Initialize basic attributes first
             self.recording = False
+            self.version = "1.0.0"
             self.audio_data = []
             self.fs = 48000
             self.channels = 2
             self.stream = None
-            self.previous_output_device = None
-            self.last_recorded_file = None
-            self.setup_menu()
-            request_microphone_access()
-            self.previous_input_device = None
-            rumps.Timer(self.check_recording_state, 5).start()
-        
-        # Update these URLs
-        self.version = "1.0.0"  # Current version
-        self.update_url = "https://raw.githubusercontent.com/madebyivans/SoundGrabber/main/version.txt"
-        self.download_url = "https://github.com/madebyivans/SoundGrabber/releases"  # Updated to GitHub releases
+            
+            # Set up logging before any other operations
+            self.setup_logging()
+            
+            logging.info("=== SoundGrabber Starting ===")
+            logging.info(f"Version: {self.version}")
+            
+            # Initialize version
+            self.version = "1.0.0"  # Current version
+            self.update_url = "https://raw.githubusercontent.com/madebyivans/SoundGrabber/main/version.txt"
+            self.download_url = "https://github.com/madebyivans/SoundGrabber/releases"
+            
+            logging.info("=== Starting Version Check ===")
+            logging.info(f"Current app version: {self.version}")
+            
+            # Try to check online version first
+            try:
+                # Bypass SSL verification
+                import ssl
+                ssl._create_default_https_context = ssl._create_unverified_context
+                
+                api_url = "https://api.github.com/repos/madebyivans/SoundGrabber/contents/version.txt"
+                logging.info(f"Checking online version at: {api_url}")
+                
+                request = urllib.request.Request(
+                    api_url,
+                    headers={
+                        'User-Agent': 'SoundGrabber',
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                )
+                
+                response = urllib.request.urlopen(request, timeout=5)
+                latest_version = response.read().decode('utf-8').strip()
+                logging.info(f"Server version: {latest_version}")
+                
+                # Store the latest version from server
+                self.store_version_requirement(latest_version)
+                
+            except Exception as e:
+                logging.warning(f"Could not check online version: {e}")
+                
+            # Now check stored version requirement
+            requirement_exists = self.check_stored_version_requirement()
+            logging.info(f"Version requirement check result: {requirement_exists}")
+            
+            if requirement_exists:
+                logging.critical("Version requirement not met. Exiting application.")
+                self.show_update_required_message()
+                AppKit.NSApp.terminate_(None)
+                return
+
+            logging.info("=== Version Check Complete ===")
+            
+            # Get the actual app path using sys.executable
+            app_dir = os.path.abspath(sys.executable)
+            logging.info(f"Running from: {app_dir}")
+
+            # Only show installation prompt if we're not already in Applications
+            if '/Applications/SoundGrabber.app' not in app_dir:
+                logging.info("Not running from Applications, initiating installation...")
+                
+                # Check if there's an existing installation
+                existing_app = '/Applications/SoundGrabber.app'
+                is_update = os.path.exists(existing_app)
+                
+                # Temporarily change activation policy to make alert visible
+                app = AppKit.NSApplication.sharedApplication()
+                logging.info("Setting activation policy...")
+                app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+                
+                # Create alert with appropriate messaging
+                logging.info("Creating installation alert...")
+                alert = AppKit.NSAlert.alloc().init()
+                if is_update:
+                    alert.setMessageText_("Update SoundGrabber")
+                    alert.setInformativeText_("Would you like to update the existing SoundGrabber installation?")
+                    alert.addButtonWithTitle_("Update")
+                else:
+                    alert.setMessageText_("Install SoundGrabber")
+                    alert.setInformativeText_("Would you like to install SoundGrabber to your Applications folder?")
+                    alert.addButtonWithTitle_("Install")
+                alert.addButtonWithTitle_("Cancel")
+                
+                # Make sure the alert window comes to front
+                AppKit.NSApp.activateIgnoringOtherApps_(True)
+                
+                logging.info("Showing alert...")
+                response = alert.runModal()
+                logging.info(f"Alert response: {response}")
+                
+                # Return to accessory app status after alert is closed
+                app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+                
+                if response == AppKit.NSAlertFirstButtonReturn:  # "Install/Update" clicked
+                    try:
+                        # If updating, quit any running instances first
+                        if is_update:
+                            logging.info("Attempting to close existing SoundGrabber instance...")
+                            try:
+                                subprocess.run(['pkill', '-f', 'SoundGrabber'], check=False)
+                                # Give it a moment to close
+                                time.sleep(1)
+                            except Exception as e:
+                                logging.warning(f"Error while trying to close existing instance: {e}")
+                        
+                        # Get source and destination paths
+                        current_file = os.path.abspath(sys.executable)
+                        logging.info(f"Current executable: {current_file}")
+                        
+                        # Look for .app in parent directories
+                        check_path = current_file
+                        for _ in range(5):  # Check up to 5 levels up
+                            check_path = os.path.dirname(check_path)
+                            logging.info(f"Checking path: {check_path}")
+                            if check_path.endswith('.app'):
+                                source_path = check_path
+                                logging.info(f"Found .app at: {source_path}")
+                                break
+                        else:
+                            raise Exception("Could not locate SoundGrabber.app")
+                        
+                        dest_path = '/Applications/SoundGrabber.app'
+                        
+                        logging.info(f"Found source path: {source_path}")
+                        logging.info(f"Destination path: {dest_path}")
+                        
+                        # Create an AppleScript that uses the security system dialog
+                        logging.info("Creating installation script...")
+                        action = "update" if is_update else "install"
+                        script = f'''
+                            tell application "Finder"
+                                try
+                                    do shell script "rm -rf '{dest_path}'" with prompt "SoundGrabber needs permission to {action}" with administrator privileges
+                                    do shell script "cp -R '{source_path}' '{dest_path}'" with administrator privileges
+                                    return "success"
+                                on error errMsg
+                                    return "error: " & errMsg
+                                end try
+                            end tell
+                        '''
+                        
+                        # Run the AppleScript
+                        logging.info(f"Running {action} script...")
+                        result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                        logging.info(f"Installation script output: {result.stdout}")
+                        
+                        if result.returncode != 0:
+                            logging.error(f"Installation script error: {result.stderr}")
+                            raise Exception(f"{action.capitalize()} failed: {result.stderr}")
+                        
+                        # Verify installation
+                        logging.info("Verifying installation...")
+                        if os.path.exists(dest_path):
+                            logging.info(f"{action.capitalize()} successful")
+                            
+                            # Launch the installed version
+                            logging.info("Launching installed version...")
+                            subprocess.Popen(['open', dest_path])
+                            
+                            # Quit current instance
+                            logging.info("Quitting current instance...")
+                            sys.exit(0)
+                            return
+                        else:
+                            logging.error(f"{action.capitalize()} failed - destination not found")
+                            raise Exception(f"{action.capitalize()} failed")
+                            
+                    except Exception as e:
+                        logging.error(f"Installation error: {e}")
+                        logging.error(traceback.format_exc())
+                        
+                        # Show error to user
+                        error_alert = AppKit.NSAlert.alloc().init()
+                        error_alert.setMessageText_("Installation Failed")
+                        error_alert.setInformativeText_(f"Could not install SoundGrabber: {str(e)}")
+                        error_alert.runModal()
+                        
+                        # Return to accessory app status
+                        app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+                else:
+                    logging.info("User cancelled installation")
+            
+            # Continue with normal initialization
+            atexit.register(self.cleanup_on_exit)
+            
+            self.icon_path = resource_path("icon.icns")
+            self.icon_recording_path = resource_path("icon_recording.icns")
+            
+            # Keep only these essential activation settings
+            app = AppKit.NSApplication.sharedApplication()
+            app.activateIgnoringOtherApps_(False)
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+            
+            super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
+            self.setup_logging()
+            
+            # Initialize switch_audio_source_path FIRST
+            self.switch_audio_source_path = self.find_switch_audio_source()
+            
+            # Check if setup is needed
+            setup_needed = self.needs_setup()
+            if setup_needed:
+                logging.info("First-time setup needed...")
+                self.run_setup_wizard()
+            else:
+                logging.info("All requirements met, starting main app...")
+                # Continue with normal app initialization
+                self.settings = self.load_settings()
+                self.recording = False
+                self.audio_data = []
+                self.fs = 48000
+                self.channels = 2
+                self.stream = None
+                self.previous_output_device = None
+                self.last_recorded_file = None
+                self.setup_menu()
+                request_microphone_access()
+                self.previous_input_device = None
+                rumps.Timer(self.check_recording_state, 5).start()
+            
+            # Update these URLs
+            self.version = "1.0.0"  # Current version
+            self.update_url = "https://raw.githubusercontent.com/madebyivans/SoundGrabber/main/version.txt"
+            self.download_url = "https://github.com/madebyivans/SoundGrabber/releases"  # Updated to GitHub releases
+
+        except Exception as e:
+            logging.error(f"Error during setup: {e}")
+            logging.error(traceback.format_exc())
+            sys.exit(1)
 
     def setup_logging(self):
-        app_directory = os.path.dirname(os.path.abspath(__file__))
-        log_file = os.path.join(app_directory, 'audio_recorder.log')
-        logging.basicConfig(filename=log_file, 
-                           level=logging.INFO,  # Changed from ERROR to INFO
-                           format='%(asctime)s - %(levelname)s - %(message)s')
+        if hasattr(self, '_logging_setup'):
+            return
+        
+        try:
+            # Get the user's home directory and create a hidden app directory
+            home = os.path.expanduser('~')
+            app_dir = os.path.join(home, '.soundgrabber')
+            os.makedirs(app_dir, exist_ok=True)
+            
+            # Set up the log file path
+            log_file = os.path.join(app_dir, 'soundgrabber.log')
+            
+            # Create a detailed formatter
+            formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+            )
+            
+            # Set up file handler with rotation
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_file,
+                maxBytes=5*1024*1024,  # 5MB
+                backupCount=3
+            )
+            file_handler.setFormatter(formatter)
+            
+            # Configure root logger
+            root_logger = logging.getLogger()
+            root_logger.setLevel(logging.INFO)  # Changed to INFO level
+            
+            # Remove any existing handlers
+            root_logger.handlers = []
+            
+            # Add our handler
+            root_logger.addHandler(file_handler)
+            
+            self._logging_setup = True
+            
+        except Exception as e:
+            print(f"Failed to setup logging: {str(e)}")
+            logging.basicConfig(
+                level=logging.INFO,  # Changed to INFO level
+                format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+            )
+
+    def handle_error(self, error, context="", show_to_user=True):
+        """
+        Centralized error handling method
+        
+        Args:
+            error: The exception object
+            context: String describing where/when the error occurred
+            show_to_user: Boolean indicating if error should be shown to user
+        """
+        try:
+            # Log the full error with context
+            logging.error(f"Error in {context}: {str(error)}")
+            logging.error(traceback.format_exc())
+            
+            if show_to_user:
+                # Temporarily change activation policy to make alert visible
+                app = AppKit.NSApplication.sharedApplication()
+                previous_policy = app.activationPolicy()
+                app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+                
+                # Create and configure alert
+                alert = AppKit.NSAlert.alloc().init()
+                alert.setMessageText_("SoundGrabber Error")
+                
+                # Create a more user-friendly error message
+                user_message = str(error)
+                if isinstance(error, OSError):
+                    if error.errno == errno.ENOSPC:
+                        user_message = "Not enough disk space available."
+                    elif error.errno == errno.EACCES:
+                        user_message = "Permission denied. Please check your system settings."
+                
+                alert.setInformativeText_(f"{context}\n\n{user_message}")
+                alert.addButtonWithTitle_("OK")
+                
+                # Add "Show Log" button for technical users
+                alert.addButtonWithTitle_("Show Log")
+                
+                # Show the alert
+                response = alert.runModal()
+                
+                # Handle "Show Log" button
+                if response == AppKit.NSAlertSecondButtonReturn:
+                    log_dir = os.path.dirname(logging.getLoggerClass().root.handlers[0].baseFilename)
+                    subprocess.run(['open', log_dir])
+                
+                # Restore previous activation policy
+                app.setActivationPolicy_(previous_policy)
+                
+        except Exception as e:
+            # If error handling fails, at least try to log it
+            logging.critical(f"Error handler failed: {e}")
+            logging.critical(traceback.format_exc())
 
     def load_settings(self):
         settings_path = '/Users/ivans/Desktop/app/audio_recorder_settings.txt'
@@ -160,12 +454,15 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def start_recording(self):
         try:
+            logging.info("=== Starting Recording Process ===")
             # Quick settings reload and output folder validation
             try:
                 self.settings = self.load_settings()
                 output_folder = self.settings['output_folder']
+                logging.info(f"Output folder: {output_folder}")
                 
                 if not os.path.exists(output_folder):
+                    logging.warning(f"Output folder not found: {output_folder}")
                     # Temporarily change activation policy to make alert visible
                     app = AppKit.NSApplication.sharedApplication()
                     app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
@@ -197,6 +494,7 @@ class AdvancedAudioRecorderApp(rumps.App):
                         self.edit_settings(None)
                         return
                     else:  # "Cancel"
+                        logging.info("Recording cancelled - no output folder")
                         return
                 
             except Exception as e:
@@ -219,12 +517,14 @@ class AdvancedAudioRecorderApp(rumps.App):
             self.channels = 2
             self.audio_data = []
             
+            logging.info("Setting up audio devices...")
             # Set BlackHole 2ch input gain to -1 dB before initializing stream
             self.set_blackhole_gain(-1)
             
             # Switch devices first
             self.switch_devices("BlackHole 2ch", "SoundGrabber")
             
+            logging.info("Initializing audio stream...")
             # Initialize stream and ensure it's ready
             self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
                                        dtype='int32', device='BlackHole 2ch',
@@ -244,6 +544,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             else:
                 logging.warning("Stream may not be receiving data")
             
+            logging.info("Playing start sound...")
             # Now that stream is confirmed ready, play start sound
             self.play_sound('start_recording.wav')
             time.sleep(0.135)  # Exact duration of start_recording.wav
@@ -251,6 +552,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Start recording immediately after sound
             self.recording = True
             self.recording_start_time = time.time()
+            logging.info("Recording started successfully")
             
             self.menu["Start Recording"].title = "Stop Recording"
             self.icon = self.icon_recording_path
@@ -261,34 +563,47 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def stop_recording(self):
         try:
+            logging.info("=== Stopping Recording Process ===")
             self.recording = False
+            
             if self.stream:
+                logging.info("Closing audio stream...")
                 self.stream.stop()
                 self.stream.close()
             
             if self.audio_data:
+                logging.info("Saving recorded audio...")
                 self.save_audio_file()
             
             # Restore previous devices
             if self.previous_input_device:
+                logging.info(f"Restoring input device to: {self.previous_input_device}")
                 self.switch_input_device(self.previous_input_device)
-                logging.info(f"Restored input device to: {self.previous_input_device}")
             
             if self.previous_output_device:
+                logging.info(f"Restoring output device to: {self.previous_output_device}")
                 self.switch_to_device(self.previous_output_device)
-                logging.info(f"Restored output device to: {self.previous_output_device}")
             
+            logging.info("Playing stop sound...")
             self.play_sound('stop_recording.wav')
             
             self.menu["Start Recording"].title = "Start Recording"
             self.icon = self.icon_path
             
+            logging.info("Recording stopped successfully")
+            
         except Exception as e:
             logging.error(f"Error stopping recording: {str(e)}")
             logging.error(traceback.format_exc())
         finally:
-            self.stream = None
-            self.audio_data = []
+            # Ensure we always try to restore devices
+            try:
+                if hasattr(self, 'previous_input_device') and self.previous_input_device:
+                    self.switch_input_device(self.previous_input_device)
+                if hasattr(self, 'previous_output_device') and self.previous_output_device:
+                    self.switch_to_device(self.previous_output_device)
+            except Exception as e:
+                logging.error(f"Error in device restoration: {str(e)}")
 
     def save_audio_file(self):
         try:
@@ -296,17 +611,15 @@ class AdvancedAudioRecorderApp(rumps.App):
                 logging.warning("No audio data to save")
                 return
 
+            logging.info("=== Starting Audio Save Process ===")
             start_time = time.time()
             audio_array = np.concatenate(self.audio_data, axis=0)
             logging.info(f"Raw audio array shape: {audio_array.shape}, dtype: {audio_array.dtype}")
 
-            # Check if the audio is too short
-            if audio_array.shape[0] < 100:  # Adjust this threshold as needed
-                logging.warning("Audio is too short to process")
-                return
-
-            # Check for silence/no signal
+            # Check signal levels
             rms = np.sqrt(np.mean(audio_array**2))
+            logging.info(f"Audio RMS level: {rms}")
+            
             if rms < 1e-6:  # Adjust threshold as needed
                 logging.error("No signal detected in recording")
                 
@@ -341,14 +654,14 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Trim silence from start and end
             logging.info("Trimming silence from start and end")
             trimmed_audio, start_trim, end_trim = self.trim_silence_int32(audio_array)
-            
+            logging.info(f"Trimmed {start_trim} samples from start, {end_trim} samples from end")
+
             # Find the first transient in the trimmed audio
             transient_start = self.find_first_transient(trimmed_audio)
             logging.info(f"First transient found at sample: {transient_start}")
 
             # Further trim the audio to start at the first transient
             final_audio = trimmed_audio[transient_start:]
-            
             logging.info(f"Final audio shape after transient trimming: {final_audio.shape}")
 
             # Apply initial fade if no trimming occurred (audio was already playing)
@@ -365,11 +678,13 @@ class AdvancedAudioRecorderApp(rumps.App):
             if end_trim == audio_array.shape[0]:
                 fade_out_duration = int(0.04 * self.fs)  # 40ms fade-out
                 final_audio = self.apply_fade_int32(final_audio, fade_out_duration, fade_in=False)
+                logging.info("Applied fade-out to audio end")
             else:
                 logging.info("No fade-out applied as end trimming was performed")
 
             # Normalize audio to float range [-1, 1]
             audio_array_normalized = final_audio.astype(np.float32) / np.iinfo(np.int32).max
+            logging.info("Audio normalized to float range")
 
             # Get list of existing files with same name
             recording_name = self.settings['recording_name']
@@ -400,21 +715,18 @@ class AdvancedAudioRecorderApp(rumps.App):
             filename = f"{recording_name}_{number:02d}.wav"
             filepath = os.path.join(output_folder, filename)
             
-            os.makedirs(output_folder, exist_ok=True)
-            
-            logging.info(f"Attempting to save file to: {filepath}")
+            logging.info(f"Saving audio to: {filepath}")
             sf.write(filepath, audio_array_normalized, self.fs, subtype='FLOAT')
             
+            # Verify file was saved
             if os.path.exists(filepath):
                 file_size = os.path.getsize(filepath)
-                logging.info(f"File saved successfully. Size: {file_size} bytes")
+                processing_time = time.time() - start_time
+                logging.info(f"File saved successfully. Size: {file_size} bytes, Processing time: {processing_time:.2f}s")
                 self.last_recorded_file = filepath
             else:
                 logging.error("File was not created")
-
-            end_time = time.time()
-            logging.info(f"Total audio processing and saving time: {end_time - start_time:.2f} seconds")
-
+            
         except Exception as e:
             logging.error(f"Error saving audio file: {e}")
             logging.error(traceback.format_exc())
@@ -433,10 +745,12 @@ class AdvancedAudioRecorderApp(rumps.App):
     def audio_callback(self, indata, frames, time_info, status):
         if status:
             logging.warning(f"Audio callback status: {status}")
-        self.last_callback_time = time.time()  # Use Python's time instead
+        self.last_callback_time = time.time()
         if self.recording:
             self.audio_data.append(indata.copy())
-            logging.debug(f"Recorded chunk shape: {indata.shape}, min: {np.min(indata)}, max: {np.max(indata)}")
+            # Change to debug level to avoid log spam
+            if len(self.audio_data) % 100 == 0:  # Log every 100th chunk
+                logging.debug(f"Recording progress: {len(self.audio_data)} chunks")
 
     def find_switch_audio_source(self):
         """Look for SwitchAudioSource in multiple locations"""
@@ -708,7 +1022,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             import ssl
             ssl._create_default_https_context = ssl._create_unverified_context
             
-            # Use GitHub API instead of raw file
+            # Use GitHub API
             api_url = "https://api.github.com/repos/madebyivans/SoundGrabber/contents/version.txt"
             
             logging.info(f"Checking for updates at URL: {api_url}")
@@ -721,18 +1035,26 @@ class AdvancedAudioRecorderApp(rumps.App):
                 }
             )
             
-            response = urllib.request.urlopen(request, timeout=10)
+            response = urllib.request.urlopen(request, timeout=5)
             latest_version = response.read().decode('utf-8').strip()
             
             logging.info(f"Latest version from server: {latest_version}")
             
-            # Convert version strings to tuples for comparison
-            current = tuple(map(int, self.version.split('.')))
-            latest = tuple(map(int, latest_version.split('.')))
-            logging.info(f"Comparing versions - Current: {current}, Latest: {latest}")
+            # Store or clear version requirement based on server version
+            self.store_version_requirement(latest_version)
             
-            if latest > current:
-                # Add update menu item above the separator before "Quit"
+            # Check if major version update is available
+            current_major = int(self.version.split('.')[0])
+            latest_major = int(latest_version.split('.')[0])
+            
+            if latest_major > current_major:
+                logging.warning("Major version update required")
+                self.show_update_required_message()
+                AppKit.NSApp.terminate_(None)
+                return
+            
+            # For non-major updates, continue with normal update notification
+            elif latest_version > self.version:
                 self.menu.insert_before(
                     "Check for Updates",
                     rumps.MenuItem(
@@ -753,16 +1075,27 @@ class AdvancedAudioRecorderApp(rumps.App):
                     subtitle="No Updates Available",
                     message=f"You're running the latest version ({self.version})"
                 )
-                
-        except Exception as e:
-            logging.error(f"Error checking for updates: {str(e)}")
-            logging.error(traceback.format_exc())
+            
+        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
+            # Handle connection errors
+            logging.warning(f"Could not check for updates (connection error): {e}")
+            # When offline, fall back to stored version requirement
+            if self.check_stored_version_requirement():
+                self.show_update_required_message()
+                AppKit.NSApp.terminate_(None)
+                return
+            
             if not silent:
                 rumps.notification(
                     title="SoundGrabber",
                     subtitle="Update Check Failed",
-                    message="Could not check for updates. Please try again later."
+                    message="Could not check for updates. Will continue with current version."
                 )
+            return
+            
+        except Exception as e:
+            logging.error(f"Error checking for updates: {str(e)}")
+            logging.error(traceback.format_exc())
 
     def download_update(self, sender=None):
         try:
@@ -915,16 +1248,28 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.error(traceback.format_exc())
 
     def cleanup_on_exit(self):
+        """Ensure proper cleanup when app exits"""
         try:
-            if self.recording:
-                logging.info("Application exiting while recording, restoring audio devices...")
-                if hasattr(self, 'previous_input_device') and self.previous_input_device:
-                    self.switch_input_device(self.previous_input_device)
-                    logging.info(f"Restored input device to: {self.previous_input_device}")
-                
-                if hasattr(self, 'previous_output_device') and self.previous_output_device:
-                    self.switch_to_device(self.previous_output_device)
-                    logging.info(f"Restored output device to: {self.previous_output_device}")
+            logging.info("=== Starting Cleanup ===")
+            if hasattr(self, 'recording') and self.recording:
+                logging.info("Stopping active recording")
+                self.stop_recording()
+            
+            if hasattr(self, 'stream') and self.stream:
+                logging.info("Closing audio stream")
+                self.stream.close()
+            
+            # Restore audio devices if needed
+            if hasattr(self, 'previous_input_device') and self.previous_input_device:
+                logging.info(f"Restoring input device to: {self.previous_input_device}")
+                self.switch_input_device(self.previous_input_device)
+            
+            if hasattr(self, 'previous_output_device') and self.previous_output_device:
+                logging.info(f"Restoring output device to: {self.previous_output_device}")
+                self.switch_to_device(self.previous_output_device)
+            
+            logging.info("Cleanup completed successfully")
+            
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")
             logging.error(traceback.format_exc())
@@ -992,35 +1337,97 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.error(f"Error opening settings file: {e}")
             logging.error(traceback.format_exc())
 
+    def check_stored_version_requirement(self):
+        """Check if there's a stored version requirement that hasn't been met"""
+        try:
+            requirement_file = os.path.join(tempfile.gettempdir(), 'soundgrabber_version_requirement.json')
+            if os.path.exists(requirement_file):
+                with open(requirement_file, 'r') as f:
+                    data = json.load(f)
+                    required_version = data.get('required_version')
+                    if required_version:
+                        current_major = int(self.version.split('.')[0])
+                        required_major = int(required_version.split('.')[0])
+                        return required_major > current_major
+            return False
+        except Exception as e:
+            logging.error("Version check error")
+            return False
+
+    def store_version_requirement(self, required_version):
+        """Store the version requirement persistently"""
+        try:
+            requirement_file = os.path.join(tempfile.gettempdir(), 'soundgrabber_version_requirement.json')
+            
+            # Always remove existing file first
+            if os.path.exists(requirement_file):
+                os.remove(requirement_file)
+            
+            # Parse versions
+            required_major = int(required_version.split('.')[0])
+            current_major = int(self.version.split('.')[0])
+            
+            # If server version is 1.x.x or lower than current, don't store anything
+            if required_major <= 1 or required_major <= current_major:
+                return
+            
+            # Only store if it's a higher major version
+            if required_major > current_major:
+                with open(requirement_file, 'w') as f:
+                    json.dump({'required_version': required_version}, f)
+        
+        except Exception:
+            pass  # Silently fail
+
+    def show_update_required_message(self):
+        """Show the update required message and exit"""
+        try:
+            # Temporarily change activation policy to make alert visible
+            app = AppKit.NSApplication.sharedApplication()
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+            
+            alert = AppKit.NSAlert.alloc().init()
+            alert.setMessageText_("Critical Update Required")
+            alert.setInformativeText_(
+                f"Your version ({self.version}) is outdated and no longer supported. "
+                "Please update to continue using SoundGrabber."
+            )
+            alert.addButtonWithTitle_("Update Now")
+            alert.addButtonWithTitle_("Exit")
+            
+            # Make sure the alert window comes to front
+            AppKit.NSApp.activateIgnoringOtherApps_(True)
+            
+            response = alert.runModal()
+            
+            if response == AppKit.NSAlertFirstButtonReturn:  # "Update Now"
+                webbrowser.open("https://madebyivans.gumroad.com/l/soundgrabber")
+            
+            # Return to accessory app status
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+            
+        except Exception as e:
+            logging.error(f"Error showing update message: {e}")
+
 if __name__ == "__main__":
     try:
         app = AdvancedAudioRecorderApp()
-        app.check_for_updates(silent=True)  # Silent update check
+        app.check_for_updates(silent=True)
+        
+        # Add cleanup handler
+        atexit.register(app.cleanup_on_exit)
+        
+        logging.info("Starting main application loop")
         app.run()
+        
     except Exception as e:
-        error_message = f"SoundGrabber encountered an unexpected error: {str(e)}"
-        logging.critical(error_message)
+        logging.critical(f"Fatal error: {str(e)}")
         logging.critical(traceback.format_exc())
         
-        # Create a user-friendly error message
-        user_message = (
-            "SoundGrabber encountered an unexpected error and needs to close.\n\n"
-            "Please check the crash log for more details and report this issue (a.ivans@icloud.com).\n"
-            f"Error details: {str(e)[:100]}..." if len(str(e)) > 100 else str(e)
-        )
-        
-        # Write to crash log
-        crash_log_path = os.path.expanduser('~/Desktop/soundgrabber_crash_log.txt')
+        # Move crash log to app directory instead of Desktop
+        crash_log_path = os.path.expanduser('~/.soundgrabber/crash.log')
         with open(crash_log_path, 'w') as f:
-            f.write(f"{error_message}\n\n")
+            f.write(f"SoundGrabber Crash Report\n")
+            f.write(f"Version: {app.version if 'app' in locals() else 'Unknown'}\n")
+            f.write(f"Time: {datetime.now()}\n\n")
             f.write(traceback.format_exc())
-        
-        # Display error to user
-        rumps.notification(
-            title="SoundGrabber Error",
-            subtitle="Application Crashed",
-            message=user_message
-        )
-        
-        # Ensure the app exits
-        sys.exit(1)
