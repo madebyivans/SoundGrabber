@@ -868,12 +868,16 @@ class AdvancedAudioRecorderApp(rumps.App):
                     subtitle="Setup Required",
                     message="Please complete the setup process before using SoundGrabber."
                 )
-                AppKit.NSApp.terminate_(None)  # Properly quit the app
+                AppKit.NSApp.terminate_(None)
+            else:
+                # Restart the app properly
+                self.__init__()  # Reinitialize the app
+                self.run()
         
         except Exception as e:
             logging.error(f"Error during setup wizard: {e}")
             logging.error(traceback.format_exc())
-            AppKit.NSApp.terminate_(None)  # Properly quit on error
+            AppKit.NSApp.terminate_(None)
 
     def set_blackhole_gain(self, gain_db):
         try:

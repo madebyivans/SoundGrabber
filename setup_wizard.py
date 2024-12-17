@@ -9,6 +9,7 @@ import json
 import plistlib
 import AVKit
 import AVFoundation
+import sys
 
 class WindowDelegate(AppKit.NSObject):
     def windowShouldClose_(self, sender):
@@ -91,14 +92,15 @@ When the installer appears, follow the prompts and enter your password when aske
                 },
                 {
                     "title": "Setup Complete!",
-                    "text": "SoundGrabber is now ready to use. Click the menu bar icon to start recording!",
+                    "text": "SoundGrabber is now ready to use. Would you like to watch a quick guide on how to use it?",
                     "image": "complete.png",
-                    "button": "Continue"
+                    "button": "Watch Guide",
+                    "secondary_button": "Skip Guide"  # Add secondary button
                 },
                 {
                     "title": "Quick Start Guide",
                     "text": "Watch this short guide to learn how to use SoundGrabber",
-                    "video": True,  # This flags that this step should show video
+                    "video": True,
                     "button": "Finish"
                 }
             ]
@@ -313,17 +315,50 @@ When the installer appears, follow the prompts and enter your password when aske
         logging.info(f"Button frame: {actual_frame}")
         logging.info(f"Button cell size: {button_cell.controlSize()}")
         
+        # Add secondary button (initially hidden)
+        self.secondary_button = AppKit.NSButton.alloc().initWithFrame_(
+            AppKit.NSMakeRect(420, 40, 160, 44)  # Keep original frame height
+        )
+        self.secondary_button.setBezelStyle_(0)
+        self.secondary_button.setButtonType_(AppKit.NSButtonTypeMomentaryPushIn)
+        self.secondary_button.setTitle_("Skip Guide")
+        self.secondary_button.setTarget_(self)
+        self.secondary_button.setAction_("skipGuide:")
+        self.secondary_button.setHidden_(True)
+        
+        # Match the taller box style of Watch Guide button
+        self.secondary_button.setWantsLayer_(True)
+        self.secondary_button.layer().setCornerRadius_(22.0)
+        self.secondary_button.layer().setBorderWidth_(0)
+        
+        # Increase the bezel's height to match Watch Guide
+        self.secondary_button.cell().setControlSize_(AppKit.NSControlSizeLarge)  # Make the bezel taller
+        self.secondary_button.setBezelColor_(AppKit.NSColor.darkGrayColor())
+        
+        # White text for secondary button
+        attrs = {
+            AppKit.NSFontAttributeName: AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightSemibold),
+            AppKit.NSForegroundColorAttributeName: AppKit.NSColor.whiteColor()
+        }
+        title_string = AppKit.NSAttributedString.alloc().initWithString_attributes_("Skip Guide", attrs)
+        self.secondary_button.setAttributedTitle_(title_string)
+        
         # Add views in correct order
         self.content.addSubview_(self.button)
         self.content.addSubview_(self.title_label)
         self.content.addSubview_(self.image_view)
         self.content.addSubview_(self.text_view)
+        self.content.addSubview_(self.secondary_button)
         
         self.window.setContentView_(self.content)
         self.update_content()
         
     def update_content(self):
         step = self.steps[self.current_step]
+        
+        # Show/hide secondary button based on current step
+        if hasattr(self, 'secondary_button'):
+            self.secondary_button.setHidden_(self.current_step != 3)  # Show only on "Setup Complete" step
         
         # If it's the video step
         if step.get("video", False):
@@ -488,6 +523,7 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
         
         self.player_view.setWantsLayer_(True)
         self.player_view.setVideoGravity_(AVFoundation.AVLayerVideoGravityResizeAspectFill)
+        # Hide controls
         self.player_view.setControlsStyle_(AVKit.AVPlayerViewControlsStyleNone)
         self.player_view.setShowsFullScreenToggleButton_(False)
         
@@ -570,7 +606,15 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
         player = AVFoundation.AVPlayer.playerWithURL_(video_url)
         self.player_view.setPlayer_(player)
         
-        # Add observer for video completion
+        # Add observer for video completion using KVO
+        self.player_view.player().currentItem().addObserver_forKeyPath_options_context_(
+            self,
+            'status',
+            AVFoundation.NSKeyValueObservingOptionNew,
+            None
+        )
+        
+        # Register for end of video notification
         AppKit.NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
             self,
             'videoDidFinish:',
@@ -588,9 +632,49 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
         
         return player
 
+    def observeValueForKeyPath_ofObject_change_context_(self, keyPath, object, change, context):
+        if keyPath == 'status':
+            if object.status() == AVFoundation.AVPlayerItemStatusReadyToPlay:
+                # Video is ready to play
+                self.player_view.player().play()
+
     def videoDidFinish_(self, notification):
-        if hasattr(self, 'button'):
-            self.button.setHidden_(False)
+        logging.info("Video finished playing")
+        try:
+            # Get path to main script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            main_script = os.path.join(script_dir, 'audio_recorder.py')
+            
+            # Close window first
+            self.window.close()
+            
+            # Execute the main script using os.execv
+            os.execv(sys.executable, ['python3', main_script])
+            
+        except Exception as e:
+            logging.error(f"Failed to restart app: {e}")
+            logging.error(traceback.format_exc())
+            # If restart fails, at least quit the wizard
+            AppKit.NSApp.terminate_(None)
+
+    def skipGuide_(self, sender):
+        """Handler for Skip Guide button"""
+        logging.info("User chose to skip guide")
+        try:
+            # Get path to main script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            main_script = os.path.join(script_dir, 'audio_recorder.py')
+            
+            # Close window first
+            self.window.close()
+            
+            # Execute the main script
+            os.execv(sys.executable, ['python3', main_script])
+            
+        except Exception as e:
+            logging.error(f"Failed to start main app: {e}")
+            logging.error(traceback.format_exc())
+            AppKit.NSApp.terminate_(None)
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()
