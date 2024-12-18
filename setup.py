@@ -20,102 +20,134 @@ from setuptools import setup
 
 APP = ['audio_recorder.py']
 DATA_FILES = [
-    'icon.icns',
-    'icon_recording.icns',
     ('resources', [
+        'resources/icon.icns',
+        'resources/icon_recording.icns',
+        'resources/SwitchAudioSource',
         'resources/start_recording.wav',
         'resources/stop_recording.wav',
-        'resources/version.txt'
     ]),
     ('resources/setup', [
+        'resources/setup/background.png',
         'resources/setup/welcome.png',
         'resources/setup/blackhole_install.png',
         'resources/setup/audio_midi_setup.png',
         'resources/setup/complete.png',
-        'resources/setup/background.png',
         'resources/setup/guide.mp4'
     ]),
     ('installers', [
-        'installers/BlackHole2ch-0.6.0.pkg',
-        'installers/SwitchAudioSource'
+        'installers/BlackHole2ch-0.6.0.pkg'
     ]),
-    ('licenses', [
-        'licenses/switchaudio-osx-LICENSE',
-        'licenses/blackhole-LICENSE'
-    ]),
-    'LICENSE',
-    'ATTRIBUTION.md',
-    'setup_wizard.py',
-    'utils.py',
+    ('_sounddevice_data/portaudio-binaries', [
+        '/opt/homebrew/Cellar/portaudio/19.7.0/lib/libportaudio.2.dylib'
+    ])
 ]
+
 OPTIONS = {
-    'argv_emulation': False,
-    'plist': {
-        'LSUIElement': True,
-        'NSMicrophoneUsageDescription': 'SoundGrabber needs microphone access to record audio.',
-        'CFBundleIdentifier': 'com.yourdomain.soundgrabber',
-        'CFBundleName': 'SoundGrabber',
-        'CFBundleDisplayName': 'SoundGrabber',
-        'CFBundleVersion': '1.0.0',
-        'CFBundleShortVersionString': '1.0.0',
-        'NSRequiresAquaSystemAppearance': False,
-        'CFBundleIconFile': 'icon.icns',
-        'LSApplicationCategoryType': 'public.app-category.utilities',
-    },
-    'iconfile': 'icon.icns',
+    'argv_emulation': True,
+    'iconfile': 'resources/icon.icns',
+    'semi_standalone': False,
+    'site_packages': True,
+    'strip': True,
+    'optimize': 2,
     'packages': [
-        'rumps', 
-        'sounddevice', 
-        'numpy', 
-        'soundfile', 
-        'cffi',
-        'AppKit',
-        'Cocoa',
-        'AVKit',
-        'AVFoundation'
-    ],
-    'includes': [
-        'objc', 
-        'Foundation', 
-        '_cffi_backend',
-        'subprocess',
-        'os',
-        'sys',
-        'time',
+        'PIL',
+        'numpy',
+        'sounddevice',
+        'soundfile',
+        'threading',
         'logging',
-    ],
-    'frameworks': [
-        'CoreAudio', 
+        'rumps',
+        'AppKit',
         'AVFoundation',
         'AVKit',
-        'ApplicationServices', 
-        'Foundation',
-        'AppKit',
-        'Cocoa',
+        'Quartz',
+        'objc',
+        'tkinter'
+    ],
+    'includes': [
+        'ctypes',
+        'ctypes.util',
+        'logging.handlers'
+    ],
+    'frameworks': [
+        '/Library/Frameworks/Python.framework/Versions/3.12/Python'
     ],
     'excludes': [
         'PyInstaller',
-        'pip',
         'setuptools',
+        'pip',
         'wheel',
-        'pkg_resources',
-        '_distutils_hack',
+        'pygments',
+        'cffi',
+        'test',
         'distutils'
     ],
-    'semi_standalone': False,
-    'site_packages': True,
-    'optimize': 0,
-    'strip': False,
-    'arch': 'universal2',
-    'resources': ['icon.icns'],
-    'emulate_shell_environment': False,
-    'dylib_excludes': ['libpython'],
+    'plist': {
+        'CFBundleName': 'SoundGrabber',
+        'CFBundleDisplayName': 'SoundGrabber',
+        'CFBundleIdentifier': 'com.ivans.soundgrabber',
+        'CFBundleVersion': "1.0.0",
+        'CFBundleShortVersionString': "1.0.0",
+        'NSHumanReadableCopyright': 'Copyright © 2024 Ivans Andrejevs',
+        'CFBundleDocumentTypes': [],
+        'NSHighResolutionCapable': True,
+        'NSMicrophoneUsageDescription': 'This app needs access to the microphone to record audio.',
+        'LSMinimumSystemVersion': '10.15',
+        'LSApplicationCategoryType': 'public.app-category.utilities',
+        'NSRequiresAquaSystemAppearance': False,
+        'PyRuntimeLocations': [
+            '@executable_path/../Frameworks/Python.framework/Versions/3.12/Python',
+            '/Library/Frameworks/Python.framework/Versions/3.12/Python'
+        ],
+        'LSEnvironment': {
+            'DYLD_LIBRARY_PATH': '@executable_path/../Resources/_sounddevice_data/portaudio-binaries'
+        }
+    }
 }
 
+# Function to ensure file permissions are correct
+def fix_permissions():
+    import os
+    import stat
+    
+    # Files that need execution permission
+    executables = ['resources/SwitchAudioSource']
+    
+    # Files that need read permission
+    readable = [
+        'resources/setup/guide.mp4',
+        'resources/setup/background.png',
+        'resources/setup/welcome.png',
+        'resources/setup/blackhole_install.png',
+        'resources/setup/audio_midi_setup.png',
+        'resources/setup/complete.png',
+        'resources/icon.icns',
+        'resources/icon_recording.icns',
+        'resources/start_recording.wav',
+        'resources/stop_recording.wav',
+    ]
+    
+    # Set executable permissions
+    for file in executables:
+        if os.path.exists(file):
+            os.chmod(file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR | 
+                          stat.S_IRGRP | stat.S_IXGRP |
+                          stat.S_IROTH | stat.S_IXOTH)
+    
+    # Set readable permissions
+    for file in readable:
+        if os.path.exists(file):
+            os.chmod(file, stat.S_IRUSR | stat.S_IWUSR | 
+                          stat.S_IRGRP | stat.S_IROTH)
+
 setup(
-    name='SoundGrabber',
+    name="SoundGrabber",
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
     setup_requires=['py2app'],
 )
+
+# Fix permissions before building
+fix_permissions()

@@ -1,15 +1,18 @@
-import AppKit
-import subprocess
 import os
-import time
-from utils import resource_path
 import logging
+import subprocess
+import AppKit
+import Foundation
+import AVKit
+import time
 import traceback
+from utils import resource_path
 import json
 import plistlib
-import AVKit
 import AVFoundation
 import sys
+import tempfile
+import shutil
 
 class WindowDelegate(AppKit.NSObject):
     def windowShouldClose_(self, sender):
@@ -27,25 +30,38 @@ class WindowDelegate(AppKit.NSObject):
 class SetupWizard:
     def __init__(self):
         try:
-            # Set up logging to use audio_recorder.log
-            app_dir = os.path.dirname(os.path.abspath(__file__))
-            log_file = os.path.join(app_dir, 'audio_recorder.log')  # Use the same log file
+            # Set up logging in user's home directory
+            home_dir = os.path.expanduser('~')
+            log_dir = os.path.join(home_dir, '.soundgrabber')
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            log_file = os.path.join(log_dir, 'setup_wizard.log')
             logging.basicConfig(
                 filename=log_file,
                 level=logging.INFO,
                 format='%(asctime)s - %(levelname)s - %(message)s'
             )
+            logging.info("=== Setup Wizard Log Started ===")
+            logging.info(f"Log file location: {log_file}")
             logging.info("Starting Setup Wizard...")
 
-            # Set up the switch_audio_source_path FIRST
-            self.switch_audio_source_path = os.path.join(app_dir, 'resources', 'SwitchAudioSource')
-            logging.info(f"SwitchAudioSource path: {self.switch_audio_source_path}")
+            # Define video frame dimensions
+            self.video_frame = AppKit.NSMakeRect(40, 100, 720, 405)  # x, y, width, height
             
-            if not os.path.exists(self.switch_audio_source_path):
-                logging.error(f"SwitchAudioSource not found at {self.switch_audio_source_path}")
-            else:
-                logging.info("SwitchAudioSource found")
-
+            # Update resource paths
+            self.background_image = resource_path('resources/setup/background.png')
+            self.welcome_image = resource_path('resources/setup/welcome.png')
+            self.blackhole_install_image = resource_path('resources/setup/blackhole_install.png')
+            self.audio_midi_setup_image = resource_path('resources/setup/audio_midi_setup.png')
+            self.complete_image = resource_path('resources/setup/complete.png')
+            self.guide_video = resource_path('resources/setup/guide.mp4')
+            
+            # Store path to SwitchAudioSource
+            self.switch_audio_source_path = resource_path('resources/SwitchAudioSource')
+            
+            # Store path to BlackHole installer
+            self.blackhole_installer = resource_path('installers/BlackHole2ch-0.6.0.pkg')
+            
             # Initialize status flags AFTER switch_audio_source_path is set
             self.blackhole_installed = self.check_blackhole_installed()
             self.soundgrabber_device_setup = self.check_multi_output_device()
@@ -55,10 +71,12 @@ class SetupWizard:
             app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
             
             # Set the dock icon
-            icon_path = resource_path("icon.icns")
+            icon_path = resource_path("resources/icon.icns")
             if os.path.exists(icon_path):
                 icon = AppKit.NSImage.alloc().initWithContentsOfFile_(icon_path)
                 app.setApplicationIconImage_(icon)
+            else:
+                logging.error(f"Icon not found at path: {icon_path}")
             
             # Initialize the rest of the wizard
             self.current_step = 0
@@ -761,6 +779,130 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
             logging.error(f"Error positioning windows: {e}")
             # Fallback to just opening Audio MIDI Setup
             subprocess.run(['open', '-a', 'Audio MIDI Setup'])
+
+    def play_video(self):
+        try:
+            video_path = resource_path('resources/setup/guide.mp4')
+            logging.info(f"Loading video from path: {video_path}")
+            
+            if not os.path.exists(video_path):
+                logging.error(f"Video file not found at path: {video_path}")
+                return
+                
+            # Create a temporary directory with proper permissions
+            temp_dir = tempfile.mkdtemp()
+            temp_video_path = os.path.join(temp_dir, 'guide.mp4')
+            
+            try:
+                # Copy the video file to temp directory
+                shutil.copy2(video_path, temp_video_path)
+                # Ensure permissions are correct
+                os.chmod(temp_video_path, 0o644)
+                logging.info(f"Copied video to temporary location: {temp_video_path}")
+            except Exception as e:
+                logging.error(f"Failed to copy video to temp location: {e}")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return
+            
+            video_url = Foundation.NSURL.fileURLWithPath_(temp_video_path)
+            logging.info(f"Created video URL: {video_url}")
+            
+            self.player = AVKit.AVPlayer.playerWithURL_(video_url)
+            if not self.player:
+                logging.error("Failed to create AVPlayer")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return
+            
+            # Store temp directory path for cleanup
+            self.temp_video_dir = temp_dir
+            
+            # Create the player view with the same frame as the container
+            self.player_view = AVKit.AVPlayerView.alloc().initWithFrame_(
+                self.video_container.frame()
+            )
+            if not self.player_view:
+                logging.error("Failed to create AVPlayerView")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return
+            
+            self.player_view.setPlayer_(self.player)
+            
+            # Remove any existing subviews from the container
+            for subview in self.video_container.subviews():
+                subview.removeFromSuperview()
+                
+            # Add player view to the container
+            self.video_container.addSubview_(self.player_view)
+            
+            # Add observer for playback status
+            self.player.addObserver_forKeyPath_options_context_(
+                self, "status", Foundation.NSKeyValueObservingOptionNew, None)
+            
+            # Play the video
+            self.player.play()
+            logging.info("Video playback started")
+            
+        except Exception as e:
+            logging.error(f"Error playing video: {e}")
+            logging.error(traceback.format_exc())
+            if hasattr(self, 'temp_video_dir'):
+                shutil.rmtree(self.temp_video_dir, ignore_errors=True)
+
+    def observeValueForKeyPath_ofObject_change_context_(self, keyPath, obj, change, context):
+        if keyPath == "status":
+            status = obj.status()
+            if status == AVFoundation.AVPlayerStatusFailed:
+                error = obj.error()
+                logging.error(f"Player failed with error: {error}")
+            elif status == AVFoundation.AVPlayerStatusReadyToPlay:
+                logging.info("Player is ready to play")
+            elif status == AVFoundation.AVPlayerStatusUnknown:
+                logging.info("Player status is unknown")
+
+    def create_window(self):
+        try:
+            # Create the window
+            self.window = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+                AppKit.NSMakeRect(0, 0, 800, 600),
+                AppKit.NSWindowStyleMaskTitled |
+                AppKit.NSWindowStyleMaskClosable |
+                AppKit.NSWindowStyleMaskMiniaturizable,
+                AppKit.NSBackingStoreBuffered,
+                False
+            )
+            
+            self.window.setTitle_("SoundGrabber Setup")
+            
+            # Store content view for later use
+            self.content_view = self.window.contentView()
+            
+            # Create video container view
+            self.video_container = AppKit.NSView.alloc().initWithFrame_(
+                AppKit.NSMakeRect(40, 100, 720, 405)
+            )
+            self.content_view.addSubview_(self.video_container)
+            
+            # Center window on screen
+            self.window.center()
+            
+            # Set up the window delegate
+            self.delegate = WindowDelegate.alloc().init()
+            self.window.setDelegate_(self.delegate)
+            
+            logging.info("Setup wizard window created successfully")
+            
+        except Exception as e:
+            logging.error(f"Error creating window: {e}")
+            logging.error(traceback.format_exc())
+
+    def dealloc(self):
+        # Remove observer when the window is closed
+        if hasattr(self, 'player'):
+            self.player.removeObserver_forKeyPath_(self, "status")
+        # Clean up temporary directory
+        if hasattr(self, 'temp_video_dir'):
+            shutil.rmtree(self.temp_video_dir, ignore_errors=True)
+        super().dealloc()
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()

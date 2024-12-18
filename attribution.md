@@ -2,15 +2,14 @@
 
 This software includes the following third-party components:
 
-## BlackHole 2ch
-- Copyright (C) 2019-2024 Existential Audio Inc.
-- License: GPL-3.0
-- Source: https://github.com/ExistentialAudio/BlackHole
-- License text included in: licenses/blackhole-LICENSE
+## BlackHole
+- Copyright (c) 2019-2024 existential.audio
+- Licensed under GNU General Public License v3.0
 
 ## SwitchAudioSource
-- Copyright (c) 2008-2023 Devon Weller
-- Copyright (c) 2011-2023 Christian Speich
-- License: MIT
-- Source: https://github.com/deweller/switchaudio-osx
-- License text included in: licenses/switchaudio-osx-LICENSE
+- Copyright (c) 2008-2024 Devon Weller <wellerco@gmail.com>
+- Licensed under MIT License
+
+## PortAudio
+- Copyright (c) 1999-2024 Ross Bencina and Phil Burk
+- Licensed under MIT License

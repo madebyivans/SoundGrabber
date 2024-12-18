@@ -21,12 +21,27 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import rumps
+import sys
+import os
+import ctypes.util
+
+# Initialize PortAudio path
+lib_path = os.path.join(
+    os.path.dirname(os.path.abspath(sys.argv[0])),
+    '..', 'Resources', '_sounddevice_data', 'portaudio-binaries', 'libportaudio.2.dylib'
+)
+
+# Override ctypes.util.find_library for PortAudio
+original_find_library = ctypes.util.find_library
+def custom_find_library(name):
+    if name == 'portaudio':
+        return lib_path
+    return original_find_library(name)
+ctypes.util.find_library = custom_find_library
+
 import sounddevice as sd
 import numpy as np
-import os
-import sys  # Add this import
-from datetime import datetime
+import rumps
 import logging
 import subprocess
 import time
@@ -48,6 +63,10 @@ import errno
 import socket  # Add this with the other imports
 import json
 import tempfile
+from datetime import datetime
+
+ICON_PATH = "icon.icns"
+ICON_RECORDING_PATH = "icon_recording.icns"
 
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
@@ -273,8 +292,10 @@ class AdvancedAudioRecorderApp(rumps.App):
             # Continue with normal initialization
             atexit.register(self.cleanup_on_exit)
             
-            self.icon_path = resource_path("icon.icns")
-            self.icon_recording_path = resource_path("icon_recording.icns")
+            self.icon_path = resource_path("resources/icon.icns")
+            self.recording_icon_path = resource_path("resources/icon_recording.icns")
+            self.start_sound_path = resource_path("resources/start_recording.wav")
+            self.stop_sound_path = resource_path("resources/stop_recording.wav")
             
             # Keep only these essential activation settings
             app = AppKit.NSApplication.sharedApplication()
@@ -575,7 +596,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             logging.info("Recording started successfully")
             
             self.menu["Start Recording"].title = "Stop Recording"
-            self.icon = self.icon_recording_path
+            self.icon = self.recording_icon_path
             
         except Exception as e:
             logging.error(f"Error starting recording: {str(e)}")
@@ -996,7 +1017,7 @@ class AdvancedAudioRecorderApp(rumps.App):
                 logging.warning("Recording flag is False but stream is active. Correcting state.")
                 self.recording = True
                 self.menu["Start Recording"].title = "Stop Recording"
-                self.icon = self.icon_recording_path
+                self.icon = self.recording_icon_path
 
     def log_app_state(self):
         logging.info(f"Current app state: recording={self.recording}, stream active={self.stream is not None and self.stream.active if self.stream else False}")
