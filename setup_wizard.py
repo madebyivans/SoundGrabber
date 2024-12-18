@@ -81,12 +81,13 @@ When the installer appears, follow the prompts and enter your password when aske
                 },
                 {
                     "title": "Step 2: Create Multi-Output Device",
-                    "text": """Please set up your audio output:
+                    "text": """Click 'Open Audio Setup', then set up your audio output:
 
 1. Click '+' in bottom left and select 'Create Multi-Output Device'
-2. Double click the title of 'Multi-Output Device'
+2. Double click the title of 'Multi-Output Device' (left panel)
 3. Rename it to 'SoundGrabber'
-4. Tick 'Use' for both BlackHole 2ch and your speakers""",
+4. Tick 'Use' for both BlackHole 2ch and your speakers
+5. Close Audio MIDI Setup (Cmd+Q) and press 'Continue'""",
                     "image": "audio_midi_setup.png",
                     "button": "Open Audio Setup" if not self.soundgrabber_device_setup else "Continue"
                 },
@@ -418,6 +419,21 @@ When the installer appears, follow the prompts and enter your password when aske
 Need help? Check the image above for reference."""
                     )
                     return
+                else:
+                    # Success - animate window back to center at top of screen
+                    screen = AppKit.NSScreen.mainScreen()
+                    screen_frame = screen.visibleFrame()
+                    window_frame = self.window.frame()
+                    
+                    # Calculate center position at top of screen
+                    center_x = screen_frame.origin.x + (screen_frame.size.width - window_frame.size.width) / 2
+                    center_y = screen_frame.origin.y + screen_frame.size.height - window_frame.size.height - 20  # 20px from top
+                    
+                    # Animate to center
+                    self.window.setFrame_display_animate_(
+                        AppKit.NSMakeRect(center_x, center_y, window_frame.size.width, window_frame.size.height),
+                        True, True
+                    )
         
         self.current_step += 1
         if self.current_step < len(self.steps):
@@ -446,16 +462,34 @@ Need help? Check the image above for reference."""
         time.sleep(1)  # Give time for installer to open
 
     def setup_audio(self):
-        """Open Audio MIDI Setup and bring it to front"""
+        """Open Audio MIDI Setup and position windows"""
         try:
-            # Simple open and activate
+            # First, position our setup wizard window to the left edge and top
+            screen = AppKit.NSScreen.mainScreen()
+            screen_frame = screen.visibleFrame()
+            
+            # Get our window
+            our_window = AppKit.NSApp.mainWindow()
+            our_frame = our_window.frame()
+            
+            # Calculate position (left edge and top of screen)
+            new_x = screen_frame.origin.x + 20  # 20px padding from left edge
+            new_y = screen_frame.origin.y + screen_frame.size.height - our_frame.size.height - 20  # 20px from top
+            
+            # Move our window
+            our_window.setFrame_display_animate_(
+                AppKit.NSMakeRect(new_x, new_y, our_frame.size.width, our_frame.size.height),
+                True, True
+            )
+            
+            # Simply open Audio MIDI Setup
             subprocess.run(['open', '-a', 'Audio MIDI Setup'])
             time.sleep(0.5)  # Give time for app to launch
             
             script = """
-            tell application "Audio MIDI Setup"
-                activate
-            end tell
+                tell application "Audio MIDI Setup"
+                    activate
+                end tell
             """
             subprocess.run(['osascript', '-e', script])
             
@@ -675,6 +709,58 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
             logging.error(f"Failed to start main app: {e}")
             logging.error(traceback.format_exc())
             AppKit.NSApp.terminate_(None)
+
+    def open_audio_midi_setup(self):
+        try:
+            # First, position our setup wizard window to the left edge
+            screen = AppKit.NSScreen.mainScreen()
+            screen_frame = screen.visibleFrame()
+            
+            # Get our window
+            our_window = AppKit.NSApp.mainWindow()
+            our_frame = our_window.frame()
+            
+            # Calculate position for our window (left edge, maintaining vertical position)
+            new_x = screen_frame.origin.x + 20  # 20px padding from left edge
+            new_y = our_frame.origin.y  # Keep current vertical position
+            
+            # Move our window
+            our_window.setFrame_display_animate_(
+                AppKit.NSMakeRect(new_x, new_y, our_frame.size.width, our_frame.size.height),
+                True, True
+            )
+            
+            # Open Audio MIDI Setup
+            subprocess.run(['open', '-a', 'Audio MIDI Setup'])
+            
+            # Give Audio MIDI Setup a moment to open
+            time.sleep(0.5)
+            
+            # Find Audio MIDI Setup window
+            audio_midi_app = AppKit.NSRunningApplication.runningApplicationsWithBundleIdentifier_("com.apple.AudioMIDISetup")[0]
+            audio_midi_app.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps)
+            
+            # Use AppleScript to position the Audio MIDI Setup window
+            apple_script = f'''
+                tell application "Audio MIDI Setup"
+                    activate
+                    tell application "System Events"
+                        tell process "Audio MIDI Setup"
+                            set position of window 1 to {{{our_frame.size.width + new_x + 20}, {new_y}}}
+                        end tell
+                    end tell
+                end tell
+            '''
+            
+            subprocess.run(['osascript', '-e', apple_script])
+            
+            # Bring our window back to front
+            our_window.makeKeyAndOrderFront_(None)
+            
+        except Exception as e:
+            logging.error(f"Error positioning windows: {e}")
+            # Fallback to just opening Audio MIDI Setup
+            subprocess.run(['open', '-a', 'Audio MIDI Setup'])
 
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()
