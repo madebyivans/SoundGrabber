@@ -1,2 +1,2 @@
-output_folder=/Users/ivans/Desktop
+output_folder=/Users/ivans/Desktop/test2
 recording_name=Recording

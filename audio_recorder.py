@@ -909,45 +909,31 @@ class AdvancedAudioRecorderApp(rumps.App):
 
     def edit_settings(self, _):
         try:
-            # Temporarily change activation policy to make app visible
-            app = AppKit.NSApplication.sharedApplication()
-            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+            current_name = self.settings.get('recording_name', 'recording')
             
-            # Create panel using openPanel class method
-            panel = AppKit.NSOpenPanel.openPanel()
-            panel.setCanChooseFiles_(False)
-            panel.setCanChooseDirectories_(True)
-            panel.setAllowsMultipleSelection_(False)
-            panel.setCanCreateDirectories_(True)  # Enable New Folder button
-            panel.setTitle_("Choose Recording Output Location")
-            panel.setPrompt_("Select")
-            panel.setMessage_("Choose where to save your recordings")
+            # Create AppleScript command with basic styling and proper window positioning
+            apple_script = f'''
+            tell application "System Events"
+                activate
+                set folderSelection to choose folder with prompt "Select Output Folder" default location path to desktop
+                set folderPath to POSIX path of folderSelection
+                return folderPath
+            end tell
+            '''
             
-            # If there's a current output folder, start there
-            if 'output_folder' in self.settings and os.path.exists(self.settings['output_folder']):
-                panel.setDirectoryURL_(AppKit.NSURL.fileURLWithPath_(self.settings['output_folder']))
+            # Run AppleScript and get result
+            result = subprocess.run(['osascript', '-e', apple_script], 
+                                  capture_output=True, text=True)
             
-            # Make sure the app comes to front
-            AppKit.NSApp.activateIgnoringOtherApps_(True)
-            
-            # Show the panel
-            if panel.runModal() == AppKit.NSModalResponseOK:
-                # Get the chosen path
-                chosen_path = panel.URLs()[0].path()
+            if result.returncode == 0:
+                new_folder = result.stdout.strip()
+                if new_folder:
+                    self.settings['output_folder'] = new_folder
+                    self.save_settings()
+                    logging.info(f"Updated output folder to: {new_folder}")
                 
-                # Update settings
-                self.settings['output_folder'] = chosen_path
-                self.save_settings()
-                
-                logging.info(f"Updated output folder to: {chosen_path}")
-            else:
-                logging.info("Folder selection cancelled")
-            
-            # Return to accessory app status
-            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
-            
         except Exception as e:
-            logging.error(f"Error in folder selection: {e}")
+            logging.error(f"Error editing settings: {e}")
             logging.error(traceback.format_exc())
 
     def reload_settings(self, _):
@@ -1398,10 +1384,6 @@ class AdvancedAudioRecorderApp(rumps.App):
     def show_update_required_message(self):
         """Show the update required message and exit"""
         try:
-            # Temporarily change activation policy to make alert visible
-            app = AppKit.NSApplication.sharedApplication()
-            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
-            
             alert = AppKit.NSAlert.alloc().init()
             alert.setMessageText_("Critical Update Required")
             alert.setInformativeText_(
@@ -1411,16 +1393,10 @@ class AdvancedAudioRecorderApp(rumps.App):
             alert.addButtonWithTitle_("Update Now")
             alert.addButtonWithTitle_("Exit")
             
-            # Make sure the alert window comes to front
-            AppKit.NSApp.activateIgnoringOtherApps_(True)
-            
-            response = alert.runModal()
+            response = self.show_centered_alert(alert)
             
             if response == AppKit.NSAlertFirstButtonReturn:  # "Update Now"
                 webbrowser.open("https://madebyivans.gumroad.com/l/soundgrabber")
-            
-            # Return to accessory app status
-            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
             
         except Exception as e:
             logging.error(f"Error showing update message: {e}")
