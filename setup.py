@@ -59,6 +59,7 @@ OPTIONS = {
         'CFBundleVersion': '1.0.0',
         'CFBundleShortVersionString': '1.0.0',
         'NSRequiresAquaSystemAppearance': False,
+        'CFBundleIconFile': 'icon.icns',
     },
     'iconfile': 'icon.icns',
     'packages': [
@@ -91,8 +92,23 @@ OPTIONS = {
         'AppKit',
         'Cocoa',
     ],
+    'excludes': [
+        'PyInstaller',
+        'pip',
+        'setuptools',
+        'wheel',
+        'pkg_resources',
+        '_distutils_hack',
+        'distutils'
+    ],
     'semi_standalone': False,
     'site_packages': True,
+    'optimize': 0,
+    'strip': False,
+    'arch': 'universal2',
+    'resources': ['icon.icns'],
+    'emulate_shell_environment': False,
+    'dylib_excludes': ['libpython'],
 }
 
 setup(
