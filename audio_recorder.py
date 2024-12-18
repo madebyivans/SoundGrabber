@@ -133,10 +133,11 @@ class AdvancedAudioRecorderApp(rumps.App):
                 existing_app = '/Applications/SoundGrabber.app'
                 is_update = os.path.exists(existing_app)
                 
-                # Temporarily change activation policy to make alert visible
+                # Temporarily change activation policy and bring app to front
                 app = AppKit.NSApplication.sharedApplication()
                 logging.info("Setting activation policy...")
                 app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+                app.activateIgnoringOtherApps_(True)  # Force activation
                 
                 # Create alert with appropriate messaging
                 logging.info("Creating installation alert...")
@@ -151,8 +152,23 @@ class AdvancedAudioRecorderApp(rumps.App):
                     alert.addButtonWithTitle_("Install")
                 alert.addButtonWithTitle_("Cancel")
                 
-                # Make sure the alert window comes to front
-                AppKit.NSApp.activateIgnoringOtherApps_(True)
+                # Force the alert window to front and center it
+                alert_window = alert.window()
+                screen = AppKit.NSScreen.mainScreen()
+                screen_frame = screen.visibleFrame()
+                window_frame = alert_window.frame()
+                
+                # Calculate center position
+                center_x = screen_frame.origin.x + (screen_frame.size.width - window_frame.size.width) / 2
+                center_y = screen_frame.origin.y + (screen_frame.size.height - window_frame.size.height) / 2
+                
+                # Set window position and bring to front
+                alert_window.setFrame_display_(
+                    AppKit.NSMakeRect(center_x, center_y, window_frame.size.width, window_frame.size.height),
+                    True
+                )
+                alert_window.makeKeyAndOrderFront_(None)
+                alert_window.orderFrontRegardless()
                 
                 logging.info("Showing alert...")
                 response = alert.runModal()
@@ -1408,6 +1424,44 @@ class AdvancedAudioRecorderApp(rumps.App):
             
         except Exception as e:
             logging.error(f"Error showing update message: {e}")
+
+    def show_centered_alert(self, alert):
+        """Helper method to show an alert centered and in front"""
+        try:
+            # Temporarily change activation policy and bring app to front
+            app = AppKit.NSApplication.sharedApplication()
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyRegular)
+            app.activateIgnoringOtherApps_(True)
+            
+            # Center and show alert
+            alert_window = alert.window()
+            screen = AppKit.NSScreen.mainScreen()
+            screen_frame = screen.visibleFrame()
+            window_frame = alert_window.frame()
+            
+            # Calculate center position
+            center_x = screen_frame.origin.x + (screen_frame.size.width - window_frame.size.width) / 2
+            center_y = screen_frame.origin.y + (screen_frame.size.height - window_frame.size.height) / 2
+            
+            # Set window position and bring to front
+            alert_window.setFrame_display_(
+                AppKit.NSMakeRect(center_x, center_y, window_frame.size.width, window_frame.size.height),
+                True
+            )
+            alert_window.makeKeyAndOrderFront_(None)
+            alert_window.orderFrontRegardless()
+            
+            # Show alert
+            response = alert.runModal()
+            
+            # Return to accessory app status
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+            
+            return response
+            
+        except Exception as e:
+            logging.error(f"Error showing centered alert: {e}")
+            return alert.runModal()  # Fallback to normal alert
 
 if __name__ == "__main__":
     try:
