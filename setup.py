@@ -60,6 +60,7 @@ OPTIONS = {
         'CFBundleShortVersionString': '1.0.0',
         'NSRequiresAquaSystemAppearance': False,
         'CFBundleIconFile': 'icon.icns',
+        'LSApplicationCategoryType': 'public.app-category.utilities',
     },
     'iconfile': 'icon.icns',
     'packages': [

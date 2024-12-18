@@ -174,7 +174,11 @@ class AdvancedAudioRecorderApp(rumps.App):
                 response = alert.runModal()
                 logging.info(f"Alert response: {response}")
                 
-                # Return to accessory app status after alert is closed
+                if response == AppKit.NSAlertSecondButtonReturn:  # "Cancel" clicked
+                    logging.info("User cancelled installation, exiting...")
+                    sys.exit(0)  # Exit cleanly
+                
+                # Return to accessory app status
                 app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
                 
                 if response == AppKit.NSAlertFirstButtonReturn:  # "Install/Update" clicked
