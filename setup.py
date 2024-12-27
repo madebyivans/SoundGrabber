@@ -44,7 +44,7 @@ DATA_FILES = [
 ]
 
 OPTIONS = {
-    'argv_emulation': True,
+    'argv_emulation': False,
     'iconfile': 'resources/icon.icns',
     'semi_standalone': False,
     'site_packages': True,
@@ -96,6 +96,7 @@ OPTIONS = {
         'LSMinimumSystemVersion': '10.15',
         'LSApplicationCategoryType': 'public.app-category.utilities',
         'NSRequiresAquaSystemAppearance': False,
+        'LSUIElement': True,
         'PyRuntimeLocations': [
             '@executable_path/../Frameworks/Python.framework/Versions/3.12/Python',
             '/Library/Frameworks/Python.framework/Versions/3.12/Python'
