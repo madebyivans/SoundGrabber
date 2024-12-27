@@ -691,42 +691,66 @@ Need help? Check the image above for reference or send an email to a.ivans@iclou
                 self.player_view.player().play()
 
     def videoDidFinish_(self, notification):
-        logging.info("Video finished playing")
+        logging.info("=== Starting App Restart Process ===")
         try:
-            # Get path to main script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            main_script = os.path.join(script_dir, 'audio_recorder.py')
-            
-            # Close window first
+            # Close current window
+            logging.info("Closing setup wizard window...")
             self.window.close()
             
-            # Execute the main script using os.execv
-            os.execv(sys.executable, ['python3', main_script])
+            # Get the bundle path using NSBundle
+            bundle = AppKit.NSBundle.mainBundle()
+            bundle_path = bundle.bundlePath()
+            logging.info(f"Found bundle path: {bundle_path}")
+            logging.info(f"Bundle identifier: {bundle.bundleIdentifier()}")
+            logging.info(f"Bundle executable path: {bundle.executablePath()}")
             
+            if bundle_path.endswith('.app'):
+                # We're running from a bundle
+                logging.info(f"Running from bundle: {bundle_path}")
+                
+                # Create a new instance before terminating current one
+                launch_cmd = ['open', '-n', bundle_path]
+                logging.info(f"Launching new instance with command: {launch_cmd}")
+                
+                process = subprocess.Popen(launch_cmd, 
+                                        stdout=subprocess.PIPE, 
+                                        stderr=subprocess.PIPE)
+                
+                stdout, stderr = process.communicate()
+                logging.info(f"Launch process return code: {process.returncode}")
+                if stdout:
+                    logging.info(f"Launch stdout: {stdout.decode()}")
+                if stderr:
+                    logging.error(f"Launch stderr: {stderr.decode()}")
+                
+                # Small delay to ensure new instance starts
+                logging.info("Waiting for new instance to start...")
+                time.sleep(0.5)
+                
+                # Now terminate current instance
+                logging.info("Terminating current instance...")
+                AppKit.NSApp.terminate_(None)
+            else:
+                # Development mode
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                main_script = os.path.join(script_dir, 'audio_recorder.py')
+                logging.info(f"Development mode, launching: {main_script}")
+                logging.info(f"Current executable: {sys.executable}")
+                logging.info(f"Current working directory: {os.getcwd()}")
+                os.execv(sys.executable, ['python3', main_script])
+                
         except Exception as e:
             logging.error(f"Failed to restart app: {e}")
+            logging.error(f"Exception type: {type(e)}")
+            logging.error(f"Exception details: {str(e)}")
+            logging.error("Full traceback:")
             logging.error(traceback.format_exc())
-            # If restart fails, at least quit the wizard
             AppKit.NSApp.terminate_(None)
 
     def skipGuide_(self, sender):
         """Handler for Skip Guide button"""
-        logging.info("User chose to skip guide")
-        try:
-            # Get path to main script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            main_script = os.path.join(script_dir, 'audio_recorder.py')
-            
-            # Close window first
-            self.window.close()
-            
-            # Execute the main script
-            os.execv(sys.executable, ['python3', main_script])
-            
-        except Exception as e:
-            logging.error(f"Failed to start main app: {e}")
-            logging.error(traceback.format_exc())
-            AppKit.NSApp.terminate_(None)
+        logging.info("Skip Guide button pressed - initiating app restart")
+        self.videoDidFinish_(None)  # Reuse the same logic
 
     def open_audio_midi_setup(self):
         try:

@@ -18,7 +18,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from setuptools import setup
 
-APP = ['audio_recorder.py']
+APP = [{
+    'script': 'audio_recorder.py',
+    'plist': {
+        'CFBundleName': 'SoundGrabber',
+        'CFBundleDisplayName': 'SoundGrabber',
+        'CFBundleIdentifier': 'com.ivans.soundgrabber',
+        'CFBundleVersion': "1.0.0",
+        'CFBundleShortVersionString': "1.0.0",
+        'NSHumanReadableCopyright': 'Copyright © 2024 Ivans Andrejevs',
+        'NSHighResolutionCapable': True,
+        'NSMicrophoneUsageDescription': 'This app needs access to the microphone to record audio.',
+        'LSMinimumSystemVersion': '10.15',
+        'LSApplicationCategoryType': 'public.app-category.utilities',
+        'NSRequiresAquaSystemAppearance': False,
+        'LSUIElement': True,
+    }
+}]
 DATA_FILES = [
     ('resources', [
         'resources/icon.icns',
