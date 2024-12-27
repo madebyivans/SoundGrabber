@@ -6,5 +6,16 @@
     <string>https://your-website.com/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>Q/d6noBpSv7li11eH7lg9Ah/p8qVln8Uy2jFx0/Jz9k=</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.ivans.soundgrabber</string>
+    <key>LSBackgroundOnly</key>
+    <false/>
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.systemevents</string>
+        <string>com.apple.audio.AudioMIDISetup</string>
+    </array>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
 </dict>
 </plist>
