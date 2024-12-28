@@ -17,6 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 from setuptools import setup
+import subprocess
+import os
+import time
 
 APP = [{
     'script': 'audio_recorder.py',
@@ -158,13 +161,15 @@ def fix_permissions():
             os.chmod(file, stat.S_IRUSR | stat.S_IWUSR | 
                           stat.S_IRGRP | stat.S_IROTH)
 
-setup(
-    name="SoundGrabber",
-    app=APP,
-    data_files=DATA_FILES,
-    options={'py2app': OPTIONS},
-    setup_requires=['py2app'],
-)
-
-# Fix permissions before building
-fix_permissions()
+# Add to end of setup.py
+if __name__ == "__main__":
+    # Fix permissions before building
+    fix_permissions()
+    
+    setup(
+        name="SoundGrabber",
+        app=APP,
+        data_files=DATA_FILES,
+        options={'py2app': OPTIONS},
+        setup_requires=['py2app'],
+    )

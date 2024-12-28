@@ -302,6 +302,23 @@ class AdvancedAudioRecorderApp(rumps.App):
             app.activateIgnoringOtherApps_(False)
             app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
             
+            # Request microphone access before setting up audio
+            AVAudioSession = objc.lookUpClass('AVAudioSession')
+            audio_session = AVAudioSession.sharedInstance()
+            if audio_session.respondsToSelector_('requestRecordPermission:'):
+                permission_granted = False
+                def permission_callback(allowed):
+                    nonlocal permission_granted
+                    permission_granted = allowed
+                    logging.info(f"Microphone access {'granted' if allowed else 'denied'}")
+                
+                audio_session.requestRecordPermission_(permission_callback)
+                # Small delay to allow the permission prompt to show
+                time.sleep(0.5)
+                
+                if not permission_granted:
+                    logging.warning("Microphone permission not granted")
+            
             super().__init__("SoundGrabber", icon=self.icon_path, quit_button=None)
             self.setup_logging()
             
@@ -541,22 +558,16 @@ class AdvancedAudioRecorderApp(rumps.App):
             except Exception as e:
                 logging.warning(f"Could not reload settings or validate output folder: {e}")
                 return
-
+                
             # Store current devices BEFORE any changes
             self.previous_input_device = self.get_current_input_device()
             self.previous_output_device = self.get_current_output_device()
             logging.info(f"Initial input device: {self.previous_input_device}")
             logging.info(f"Initial output device: {self.previous_output_device}")
             
-            # Quick settings reload before recording
-            try:
-                self.settings = self.load_settings()
-            except Exception as e:
-                logging.warning(f"Could not reload settings, using existing values: {e}")
-                
-            self.apply_settings()
-            self.channels = 2
+            # Clear audio data before starting new recording
             self.audio_data = []
+            self.channels = 2
             
             logging.info("Setting up audio devices...")
             # Set BlackHole 2ch input gain to -1 dB before initializing stream
@@ -566,7 +577,6 @@ class AdvancedAudioRecorderApp(rumps.App):
             self.switch_devices("BlackHole 2ch", "SoundGrabber")
             
             logging.info("Initializing audio stream...")
-            # Initialize stream and ensure it's ready
             self.stream = sd.InputStream(samplerate=self.fs, channels=self.channels, 
                                        dtype='int32', device='BlackHole 2ch',
                                        callback=self.audio_callback)
@@ -585,8 +595,8 @@ class AdvancedAudioRecorderApp(rumps.App):
             else:
                 logging.warning("Stream may not be receiving data")
             
-            logging.info("Playing start sound...")
             # Now that stream is confirmed ready, play start sound
+            logging.info("Playing start sound...")
             self.play_sound('start_recording.wav')
             time.sleep(0.135)  # Exact duration of start_recording.wav
             
@@ -597,7 +607,7 @@ class AdvancedAudioRecorderApp(rumps.App):
             
             self.menu["Start Recording"].title = "Stop Recording"
             self.icon = self.recording_icon_path
-            
+
         except Exception as e:
             logging.error(f"Error starting recording: {str(e)}")
             logging.error(traceback.format_exc())
@@ -615,6 +625,9 @@ class AdvancedAudioRecorderApp(rumps.App):
             if self.audio_data:
                 logging.info("Saving recorded audio...")
                 self.save_audio_file()
+            
+            # Clear audio data after saving
+            self.audio_data = []
             
             # Restore previous devices
             if self.previous_input_device:
@@ -645,6 +658,8 @@ class AdvancedAudioRecorderApp(rumps.App):
                     self.switch_to_device(self.previous_output_device)
             except Exception as e:
                 logging.error(f"Error in device restoration: {str(e)}")
+            self.stream = None
+            self.audio_data = []
 
     def save_audio_file(self):
         try:
@@ -787,11 +802,13 @@ class AdvancedAudioRecorderApp(rumps.App):
         if status:
             logging.warning(f"Audio callback status: {status}")
         self.last_callback_time = time.time()
+        
         if self.recording:
             self.audio_data.append(indata.copy())
-            # Change to debug level to avoid log spam
-            if len(self.audio_data) % 100 == 0:  # Log every 100th chunk
-                logging.debug(f"Recording progress: {len(self.audio_data)} chunks")
+            # Add occasional audio data logging
+            if len(self.audio_data) % 100 == 0:
+                logging.info(f"Audio stats: shape={indata.shape}, max_value={np.max(np.abs(indata))}")
+                logging.info(f"Total chunks recorded: {len(self.audio_data)}")
 
     def find_switch_audio_source(self):
         """Look for SwitchAudioSource in multiple locations"""
