@@ -1153,11 +1153,11 @@ class AdvancedAudioRecorderApp(rumps.App):
             blackhole_exists = any('BlackHole 2ch' in str(device['name']) for device in devices)
             
             if not blackhole_exists:
-                installer_path = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)), 
-                    'installers', 
-                    'BlackHole2ch-0.6.0.pkg'
-                )
+                installer_path = resource_path('installers/BlackHole2ch-0.6.0.pkg')
+                
+                if not os.path.exists(installer_path):
+                    logging.error(f"BlackHole installer not found at: {installer_path}")
+                    return False
                 
                 # Replace tkinter dialog with NSAlert
                 alert = AppKit.NSAlert.alloc().init()

@@ -471,13 +471,18 @@ Need help? Check the image above for reference."""
                 self.update_content()
 
     def install_blackhole(self):
-        installer_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 
-            'installers', 
-            'BlackHole2ch-0.6.0.pkg'
-        )
-        subprocess.run(['open', installer_path])
-        time.sleep(1)  # Give time for installer to open
+        try:
+            logging.info(f"Installing BlackHole from: {self.blackhole_installer}")
+            if not os.path.exists(self.blackhole_installer):
+                logging.error(f"BlackHole installer not found at: {self.blackhole_installer}")
+                raise FileNotFoundError("BlackHole installer package not found")
+            
+            subprocess.run(['open', self.blackhole_installer])
+            time.sleep(1)  # Give time for installer to open
+        except Exception as e:
+            logging.error(f"Failed to install BlackHole: {e}")
+            logging.error(traceback.format_exc())
+            raise
 
     def setup_audio(self):
         """Open Audio MIDI Setup and position windows"""
