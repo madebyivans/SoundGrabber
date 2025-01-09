@@ -1,2 +1,2 @@
 output_folder=/Users/ivans/Desktop/recordings
-recording_name=Voice
+recording_name=Recording

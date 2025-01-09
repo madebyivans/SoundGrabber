@@ -1,6 +1,6 @@
 """
 SoundGrabber - Audio Recording Utility
-Copyright (C) 2024 Ivans Andrejevs
+Copyright (C) 2025 Ivans Andrejevs
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ APP = [{
         'CFBundleIdentifier': 'com.ivans.soundgrabber',
         'CFBundleVersion': "1.0.0",
         'CFBundleShortVersionString': "1.0.0",
-        'NSHumanReadableCopyright': 'Copyright © 2024 Ivans Andrejevs',
+        'NSHumanReadableCopyright': 'Copyright © 2025 Ivans Andrejevs',
         'NSHighResolutionCapable': True,
         'NSMicrophoneUsageDescription': 'This app needs access to the microphone to record audio.',
         'LSMinimumSystemVersion': '10.15',
@@ -108,7 +108,7 @@ OPTIONS = {
         'CFBundleIdentifier': 'com.ivans.soundgrabber',
         'CFBundleVersion': "1.0.0",
         'CFBundleShortVersionString': "1.0.0",
-        'NSHumanReadableCopyright': 'Copyright © 2024 Ivans Andrejevs',
+        'NSHumanReadableCopyright': 'Copyright © 2025 Ivans Andrejevs',
         'CFBundleDocumentTypes': [],
         'NSHighResolutionCapable': True,
         'NSMicrophoneUsageDescription': 'This app needs access to the microphone to record audio.',
