@@ -68,6 +68,16 @@ from datetime import datetime
 ICON_PATH = "icon.icns"
 ICON_RECORDING_PATH = "icon_recording.icns"
 
+def setup_library_path():
+    if getattr(sys, 'frozen', False):
+        # Running in a bundle
+        bundle_dir = os.path.dirname(sys.executable)
+        lib_path = os.path.join(bundle_dir, 'Contents', 'Resources', 'libs')
+        os.environ['DYLD_LIBRARY_PATH'] = lib_path
+        
+setup_library_path()
+
+
 def request_microphone_access():
     AVAudioSession = objc.lookUpClass('AVAudioSession')
     audio_session = AVAudioSession.sharedInstance()

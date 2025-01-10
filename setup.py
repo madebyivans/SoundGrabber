@@ -21,6 +21,14 @@ import subprocess
 import os
 import time
 
+# Find all dylib files in the libs directory
+dylibs = []
+libs_dir = 'libs'
+if os.path.exists(libs_dir):
+    for file in os.listdir(libs_dir):
+        if file.endswith('.dylib'):
+            dylibs.append(os.path.join(libs_dir, file))
+
 APP = [{
     'script': 'audio_recorder.py',
     'plist': {
@@ -59,7 +67,8 @@ DATA_FILES = [
     ]),
     ('_sounddevice_data/portaudio-binaries', [
         '/opt/homebrew/Cellar/portaudio/19.7.0/lib/libportaudio.2.dylib'
-    ])
+    ]),
+    ('libs', dylibs)
 ]
 
 OPTIONS = {
