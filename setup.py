@@ -72,13 +72,24 @@ DATA_FILES = [
 ]
 
 OPTIONS = {
+    'dylib_excludes': ['libSystem.B.dylib'],
     'argv_emulation': False,
     'iconfile': 'resources/icon.icns',
     'semi_standalone': False,
     'site_packages': True,
-    'strip': True,
     'optimize': 2,
+    'alias': False,
     'packages': [
+        'CoreAudio',
+        'CoreMedia',
+        'CoreFoundation',
+        'Foundation',
+        '_datetime',
+        '_pickle',
+        '_socket',
+        'array',
+        'binascii',
+        'zlib',
         'PIL',
         'numpy',
         'sounddevice',
@@ -91,15 +102,37 @@ OPTIONS = {
         'AVKit',
         'Quartz',
         'objc',
-        'tkinter'
+        'tkinter',
+        'pickle',
+        'multiprocessing',
+        '_pickle',  # Add this
+        'copyreg',
+        '_compat_pickle',
+        'codecs',  # Add this
+        'encodings',  # Add this
+        'encodings.aliases'  # Add this
     ],
     'includes': [
         'ctypes',
         'ctypes.util',
-        'logging.handlers'
+        'logging.handlers',
+        'pkg_resources',
+        'multiprocessing.pool',
+        'multiprocessing.dummy',
+        'multiprocessing.managers',
+        'multiprocessing.queues',
+        'multiprocessing.synchronize',
+        'multiprocessing.heap',
+        'multiprocessing.resource_sharer',
+        'multiprocessing.spawn',
+        'multiprocessing.reduction',
+        'multiprocessing.context',
+        'multiprocessing.popen_spawn_posix',  # Add this
+        'multiprocessing.process',  # Add this
+        'multiprocessing.util'  # Add this
     ],
     'frameworks': [
-        '/Library/Frameworks/Python.framework/Versions/3.12/Python'
+        '/Library/Frameworks/Python.framework/Versions/3.12'
     ],
     'excludes': [
         'PyInstaller',
@@ -125,12 +158,16 @@ OPTIONS = {
         'LSApplicationCategoryType': 'public.app-category.utilities',
         'NSRequiresAquaSystemAppearance': False,
         'LSUIElement': True,
-        'PyRuntimeLocations': [
-            '@executable_path/../Frameworks/Python.framework/Versions/3.12/Python',
-            '/Library/Frameworks/Python.framework/Versions/3.12/Python'
+        'com.apple.security.temporary-exception.files.home-relative-path.read-write': [
+            'Library/Audio',
+            'Library/Application Support'
         ],
+        'com.apple.security.cs.allow-unsigned-executable-memory': True,
+        'com.apple.security.cs.disable-library-validation': True,
         'LSEnvironment': {
-            'DYLD_LIBRARY_PATH': '@executable_path/../Resources/_sounddevice_data/portaudio-binaries'
+            'PYTHONHOME': '@executable_path/../Resources',
+            'PYTHONPATH': '@executable_path/../Resources/lib/python3.12',
+            'DYLD_LIBRARY_PATH': '@executable_path/../Resources/_sounddevice_data/portaudio-binaries:@executable_path/../Frameworks/Python.framework/Versions/3.12/lib'
         }
     }
 }
